@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InsightShield</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <header class="popup-header">
+            <img src="../images/icon-32.png" alt="InsightShield Icon" class="header-icon">
+            <h1>InsightShield</h1>
+        </header>
+    
+        <!-- Instruction Text -->
+        <div id="maxCharCount">Max Character Count: 4000</div>
+        <div id="currentCharCount">(Current Characters Selected: 0)</div>
+        
+        <!-- Analysis Button -->
+        <button id="analyzeButton" disabled>Analyze After Summary Generation</button>
+        
+        <!-- Loading Spinner Container -->
+        <div class="loading-spinner-container">
+            <div id="loadingSpinner" class="loading-spinner" style="display: none;"></div>
+        </div>
+        
+        <footer class="popup-footer">
+            <small>Powered by InsightShield</small>
+        </footer>
+        
+        <script type="module" src="popup.js"></script>
+    </div>    
+</body>
+</html>
