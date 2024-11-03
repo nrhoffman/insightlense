@@ -15,38 +15,35 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     if (pageContent[0].result.length > 4000) {
       currentCharCount.style.color = 'red';
     } else {
-        currentCharCount.style.color = 'white';
+      currentCharCount.style.color = 'white';
     }
   } else {
-      currentCharCount.innerText = `(Current Characters Selected: 0)`;
+    currentCharCount.innerText = `(Current Characters Selected: 0)`;
   }
 
   // Starts up the sidebar
-  chrome.scripting.executeScript(
-      {
+  chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    files: ["./sidebar/content.js"]
+  },
+    () => {
+      chrome.scripting.insertCSS(
+        {
           target: { tabId: tabId },
-          files: ["./sidebar/content.js"]
-      },
-      () => {
-          chrome.scripting.insertCSS(
-              {
-                  target: { tabId: tabId },
-                  files: ["./sidebar/sidebar.css"]
-              },
-              () => {
+          files: ["./sidebar/sidebar.css"]
+        },
+        () => {
 
-                  // Send the message to show sidebar after script injection
-                  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId }, (response) => {
-                      if (chrome.runtime.lastError) {
-                          console.error("Error sending message:", chrome.runtime.lastError.message);
-                      } else {
-                          console.log("Message sent successfully:", response);
-                      }
-                  });
-              }
-          );
-      }
-  );
+          // Send the message to show sidebar after script injection
+          chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error("Error sending message:", chrome.runtime.lastError.message);
+            } else {
+              console.log("Message sent successfully:", response);
+            }
+          });
+        });
+    });
 });
 
 // Analyzed button is pressed
@@ -56,8 +53,8 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
 
     // Fetches selected content from web page
     const pageContent = await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        func: getPageContent,
+      target: { tabId: tabs[0].id },
+      func: getPageContent,
     });
 
     // Filters out nonsense text
@@ -68,9 +65,9 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
 
     // Check if pageContent is empty or over char max
     if (filteredText.length === 0 || filteredText.length > 4000) {
-      const errorText = filteredText.length === 0 
-          ? "Text must be highlighted." 
-          : "Selected characters must be under 4000.";
+      const errorText = filteredText.length === 0
+        ? "Text must be highlighted."
+        : "Selected characters must be under 4000.";
       displayError(errorText);
       return;
     }
@@ -84,16 +81,16 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
 // Function to fetch the selected content of the webpage
 function getPageContent() {
   const contentElements = window.getSelection();
-  return contentElements.toString(); 
+  return contentElements.toString();
 }
 
 // Function to display error when analyze button is pressed and conditions are met
 function displayError(message) {
   let errorMessage = document.querySelector('.error-message');
   if (!errorMessage) {
-      errorMessage = document.createElement('div');
-      errorMessage.classList.add('error-message');
-      document.querySelector('.popup-container').insertBefore(errorMessage, document.getElementById('analyzeButton'));
+    errorMessage = document.createElement('div');
+    errorMessage.classList.add('error-message');
+    document.querySelector('.popup-container').insertBefore(errorMessage, document.getElementById('analyzeButton'));
   }
   errorMessage.innerText = message;
 }

@@ -1,0 +1,39 @@
+/* Bubble Styling */
+#factCheckBubble {
+    position: absolute;
+    background-color: rgba(20, 20, 20, 0.95);
+    border: 1px 1px solid #444;
+    padding: 8px;
+    border-radius: 5px;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    color: #ffffff;
+    max-width: 250px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    display: block;
+}
+
+.bubble-title {
+    font-weight: bold;
+    font-size: 16px;
+    border-bottom: 2px solid #4caf50;
+}
+
+.bubble-content {
+    font-size: 14px;
+}
+
+#factCheckBubble:hover {
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+/* Footer Styling */
+.bubble-footer {
+    text-align: center;
+    font-size: 0.7em;
+    color: #bbb;
+    margin-top: 20px;
+    padding-top: 10px;
+}

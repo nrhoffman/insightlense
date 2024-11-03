@@ -30,6 +30,7 @@
     justify-content: center;
     align-items: center;
 }
+
 .spinner {
     width: 50px;
     height: 50px;
@@ -38,18 +39,25 @@
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
+
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Sidebar Content Styling */
-#insightSidebar p{
+#insightSidebar p {
     font-size: 0.9em;
     color: white;
 }
+
 #insightSidebar p:hover {
-    background-color: #3c4043; /* Slightly lighter background on hover */
+    background-color: #3c4043;
 }
 
 /* Close Button Styling */
@@ -59,10 +67,11 @@
     background: none;
     border: none;
     font-size: 1.5em;
-    color: #4caf50; /* Accent color for close button */
+    color: #4caf50;
     cursor: pointer;
     transition: color 0.3s ease;
 }
+
 #closeSidebarBtn:hover {
-    color: #f44336; /* Change color on hover */
+    color: #f44336;
 }
