@@ -15,9 +15,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
     }
 
+    // Populate the sidebar with summary
+    else if (request.action === 'summarizeContent') {
+        summarizeContent(request.focusInput);
+    }
+
     // Populate the sidebar with analysis
-    else if (request.action === 'populateSidebar') {
-        populateSidebar(request.pageData);
+    else if (request.action === 'analyzeContent') {
+        analyzeContent(request.pageData);
     }
 
     // Display the fact check bubble
@@ -37,7 +42,6 @@ async function createSidebar(tabId) {
         sidebar.innerHTML = `
             <button id="closeSidebarBtn">✖️</button>
             <h3>Summary</h3>
-            <div id="loadingSpinner" class="spinner"></div>
             <p id="summary"></p>
             <h3>Analysis</h3>
             <p id="analysis">Highlight text on webpage and click "Analyze" in the popup to analyze.</p>
@@ -47,44 +51,55 @@ async function createSidebar(tabId) {
         document.getElementById('closeSidebarBtn').addEventListener('click', () => {
             sidebar.style.display = 'none';
         });
-
-        const summary = document.getElementById('summary');
-        summary.innerHTML = '';
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        loadingSpinner.style.display = 'block';
-
-        // Fetches the page content
-        const pageContent = await getPageContent();
-        const maxChar = 3800;
-        let combinedSummary;
-
-        // If the page content exceeds max characters, it's broken up
-        if (pageContent.length > maxChar) {
-            const separateLines = pageContent
-                .split(/\r?\n|\r|\n/g)
-                .filter(line => (line.split(" ").length - 1) >= 3);
-            combinedSummary = await getSummary(separateLines, maxChar);
-        }
-
-        // Else page content is summarized in one pass
-        else {
-            const summarizer = await ai.summarizer.create({
-                sharedContext: `Only output in English.
-                                Only output in trained language.
-                                Use paragraph form.
-                                Only summarize the content.`
-            });
-            combinedSummary = await summarizer.summarize(pageContent);
-            summarizer.destroy();
-        }
-        loadingSpinner.style.display = 'none';
-
-        // Populate summary portion of the sidebar
-        summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
-        chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
     } else {
         sidebar.style.display = 'block'; // Show the sidebar if it already exists
     }
+}
+
+// Function fills the sidebar with a summary
+async function summarizeContent(focusInput) {
+    const summary = document.getElementById('summary');
+    summary.innerHTML = '';
+
+    let loadingSpinner = document.getElementById('loadingSpinner');
+    if (!loadingSpinner) {
+        loadingSpinner = document.createElement('div');
+        loadingSpinner.id = 'loadingSpinner';
+        loadingSpinner.classList.add('spinner');
+        summary.parentElement.insertBefore(loadingSpinner, summary);
+    }
+
+    // Fetches the page content
+    const pageContent = await getPageContent();
+    const maxChar = 3800;
+    let combinedSummary;
+
+    // If the page content exceeds max characters, it's broken up
+    if (pageContent.length > maxChar) {
+        const separateLines = pageContent
+            .split(/\r?\n|\r|\n/g)
+            .filter(line => (line.split(" ").length - 1) >= 3);
+        combinedSummary = await getSummary(separateLines, maxChar, focusInput);
+    }
+
+    // Else page content is summarized in one pass
+    else {
+        const summarizer = await ai.summarizer.create({
+            sharedContext: `Only output in English.
+                            Only output in trained language.
+                            Use paragraph form.
+                            Only summarize the content.
+                            Focus the summary on: "${focusInput}" if not blank.
+                            `
+        });
+        combinedSummary = await summarizer.summarize(pageContent);
+        summarizer.destroy();
+    }
+    loadingSpinner.remove();
+
+    // Populate summary portion of the sidebar
+    summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
+    chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
 }
 
 // Function that fetches the web page content
@@ -119,22 +134,23 @@ async function getPageContent() {
 
 // Function that breaks web content into sections for summarization.
 // Then combines the summaries into one
-async function getSummary(separateLines, maxChar) {
+async function getSummary(separateLines, maxChar, focusInput) {
     let pageArray = [];
     let curEl = '';
+
+    const summarizer = await ai.summarizer.create({
+        sharedContext: `Only output in English.
+                        Only output in trained language.
+                        Only summarize the content.
+                        Use paragraph form.
+                        Focus the summary on: "${focusInput}" if not blank.`
+    });
 
     for (const line of separateLines) {
         if ((curEl + line).length < maxChar) {
             curEl += line + '\n';
         } else {
-            const summarizer = await ai.summarizer.create({
-                sharedContext: `Only output in English.
-                                Only output in trained language.
-                                Only summarize the content.
-                                Use paragraph form.`
-            });
             const summary = await summarizer.summarize(curEl.trim());
-            summarizer.destroy();
             pageArray.push(summary);
             curEl = line + '\n';
         }
@@ -142,33 +158,19 @@ async function getSummary(separateLines, maxChar) {
 
     // Summarize and add any remaining content
     if (curEl.trim().length > 0) {
-        const summarizer = await ai.summarizer.create({
-            sharedContext: `Only output in English.
-                            Only output in trained language.
-                            Only summarize the content.
-                            Use paragraph form.`
-        });
         const summary = await summarizer.summarize(curEl.trim());
-        summarizer.destroy();
         pageArray.push(summary);
     }
 
     // Combine all summaries and create a final summarization
     const combinedSummaryInput = pageArray.join('\n'); // Join all summaries
-    const finalSummarizer = await ai.summarizer.create({
-        sharedContext: `Combine everything in a paragraph.
-                        Only output in English.
-                        Only output in trained language.
-                        Only summarize the content.
-                        Use paragraph form.`
-    });
-    const combinedSummary = await finalSummarizer.summarize(combinedSummaryInput.trim());
-    finalSummarizer.destroy();
+    const combinedSummary = await summarizer.summarize(`Combine everything and summarize into a paragraph: ${combinedSummaryInput.trim()}`);
+    summarizer.destroy();
     return combinedSummary;
 }
 
 // Function that populates the analysis portion of the sidebar
-async function populateSidebar(pageData) {
+async function analyzeContent(pageData) {
     const htmlData = await analyzePageText(pageData);
 
     const analysisContent = document.getElementById('analysis');

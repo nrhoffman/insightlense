@@ -16,12 +16,21 @@
             <h1>InsightShield</h1>
         </header>
 
-        <!-- Instruction Text -->
-        <div id="maxCharCount">Max Character Count: 4000</div>
-        <div id="currentCharCount">(Current Characters Selected: 0)</div>
+        <!-- Summarize Box -->
+        <div class="box-container">
+            <div id="sidebarCount">Enter A Subject Focus And Click Summarize</div>
+            <div class="input-button-container">
+                <input type="text" id="userInput" placeholder="Optional">
+                <button id="summarizeButton">Summarize</button>
+            </div>
+        </div>
 
-        <!-- Analysis Button -->
-        <button id="analyzeButton" disabled>Analyze After Summary Generation</button>
+        <!-- Analyze Box -->
+        <div class="box-container">
+            <div id="sidebarCount">Max Character Count: 4000</div>
+            <div id="currentCharCount">(Current Characters Selected: 0)</div>
+            <button id="analyzeButton" disabled>Analyze After Summary Generation</button>
+        </div>
 
         <!-- Loading Spinner Container -->
         <div class="loading-spinner-container">

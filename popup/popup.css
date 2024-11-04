@@ -33,32 +33,81 @@ body {
   background-color: #3c4043;
 }
 
-/* Image Styling */
-.header-icon {
-  width: 32px;
-  height: auto;
-  margin-right: 10px;
+/* Box Container */
+.box-container {
+  background-color: #333;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
 }
 
 /* Instruction Text */
-#maxCharCount,
+#sidebarCount,
 #currentCharCount {
-  color: white;
+  color: #f9f9f9;
   margin-bottom: 10px;
   text-align: center;
   font-size: 1em;
   font-weight: 500;
 }
 
-/* Error Message Styling */
-.error-message {
-  color: red;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 10px;
+/* Input and Button Container */
+.input-button-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Button Styling */
+/* Input Styling */
+#userInput {
+  flex: 1;
+  padding: 10px;
+  border-radius: 5px;
+  border: 3px solid rgba(20, 20, 20, 0.95);
+  background-color: rgba(20, 20, 20, 0.95);
+  color: #f9f9f9;
+  font-size: 1em;
+  text-align: center;
+  outline: none;
+}
+
+#userInput::placeholder {
+  color: #888;
+}
+
+#userInput:focus,
+#userInput:hover {
+  color: #f9f9f9;
+  border: 3px solid #f9f9f9;
+}
+
+/* Summarize Button Styling */
+#summarizeButton {
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  background-color: #4caf50;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
+  outline: none;
+}
+
+#summarizeButton:hover,
+#analyzeButton:hover {
+  background-color: #45a049;
+  transform: scale(1.02);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+#summarizeButton:focus,
+#analyzeButton:focus {
+  outline: 2px solid #4caf50;
+}
+
+/* Analyze Button Styling */
 #analyzeButton {
   width: 100%;
   padding: 10px;
@@ -72,28 +121,13 @@ body {
   outline: none;
 }
 
-#analyzeButton:hover {
-  background-color: #45a049;
-  transform: scale(1.02);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-#analyzeButton:focus {
-  outline: 2px solid #4caf50;
-}
-
 #analyzeButton:disabled {
   background-color: #777;
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-#analyzeButton:not(:disabled) {
-  background-color: #4caf50;
-  cursor: pointer;
-}
-
-/* Spinner Styling */
+/* Loading Spinner Styling */
 .loading-spinner-container {
   display: flex;
   justify-content: center;

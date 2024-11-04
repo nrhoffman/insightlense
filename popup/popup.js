@@ -20,8 +20,6 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   } else {
     currentCharCount.innerText = `(Current Characters Selected: 0)`;
   }
-
-  // Starts up the sidebar
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     files: ["./sidebar/content.js"]
@@ -46,7 +44,41 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     });
 });
 
-// Analyzed button is pressed
+// Summarize button is pressed
+document.getElementById('summarizeButton').addEventListener('click', async () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      files: ["./sidebar/content.js"]
+    },
+      () => {
+        chrome.scripting.insertCSS(
+          {
+            target: { tabId: tabs[0].id },
+            files: ["./sidebar/sidebar.css"]
+          },
+          () => {
+
+            const userInput = document.getElementById('userInput');
+
+            // Send the message to summarize after script injection
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: "summarizeContent",
+              tabId: tabs[0].id,
+              focusInput: userInput.value
+            }, (response) => {
+              if (chrome.runtime.lastError) {
+                console.error("Error sending message:", chrome.runtime.lastError.message);
+              } else {
+                console.log("Message sent successfully:", response);
+              }
+            });
+          });
+      });
+  });
+});
+
+// Analyze button is pressed
 document.getElementById('analyzeButton').addEventListener('click', async () => {
   const loadingSpinner = document.getElementById('loadingSpinner');
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
@@ -106,7 +138,7 @@ function sendToSidebar(pageData) {
           { target: { tabId: tabId }, files: ["./sidebar/sidebar.css"] },
           () => {
             chrome.tabs.sendMessage(tabId, {
-              action: 'populateSidebar',
+              action: 'analyzeContent',
               tabId: tabId,
               pageData: pageData
             }, (response) => {
