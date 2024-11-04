@@ -1,6 +1,34 @@
+// Listener for messages from sidebar
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
+  // Turns off loading circle when analysis is complete
+  if (request.action === "turnOffLoadingCircle") {
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    loadingSpinner.style.display = 'none';
+  }
+
+  // Actives analysis button when summary generation is complete
+  if (request.action === "activateAnalyzeButton") {
+    const analyzeButton = document.getElementById('analyzeButton');
+    analyzeButton.disabled = false;
+    analyzeButton.innerText = 'Analyze';
+  }
+});
+
 // Run when popup is opened
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   const tabId = tabs[0].id;
+
+  // Inject script and CSS once when popup opens
+  await chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    files: ["./sidebar/content.js"]
+  });
+
+  await chrome.scripting.insertCSS({
+    target: { tabId: tabId },
+    files: ["./sidebar/sidebar.css"]
+  });
 
   // Fetches selected content from web page
   const pageContent = await chrome.scripting.executeScript({
@@ -20,61 +48,39 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   } else {
     currentCharCount.innerText = `(Current Characters Selected: 0)`;
   }
-  chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    files: ["./sidebar/content.js"]
-  },
-    () => {
-      chrome.scripting.insertCSS(
-        {
-          target: { tabId: tabId },
-          files: ["./sidebar/sidebar.css"]
-        },
-        () => {
 
-          // Send the message to show sidebar after script injection
-          chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error("Error sending message:", chrome.runtime.lastError.message);
-            } else {
-              console.log("Message sent successfully:", response);
-            }
-          });
-        });
-    });
+  // Send the message to show sidebar after script injection
+  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error("Error sending message:", chrome.runtime.lastError.message);
+    } else {
+      console.log("Message sent successfully:", response);
+    }
+  });
 });
+
 
 // Summarize button is pressed
 document.getElementById('summarizeButton').addEventListener('click', async () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      files: ["./sidebar/content.js"]
-    },
-      () => {
-        chrome.scripting.insertCSS(
-          {
-            target: { tabId: tabs[0].id },
-            files: ["./sidebar/sidebar.css"]
-          },
-          () => {
+    const userInput = document.getElementById('userInput');
 
-            const userInput = document.getElementById('userInput');
+    // Update Analyze Button State
+    const analyzeButton = document.getElementById('analyzeButton');
+    analyzeButton.innerText = 'Analyze After Summary Generation';
+    analyzeButton.disabled = true;
 
-            // Send the message to summarize after script injection
-            chrome.tabs.sendMessage(tabs[0].id, {
-              action: "summarizeContent",
-              tabId: tabs[0].id,
-              focusInput: userInput.value
-            }, (response) => {
-              if (chrome.runtime.lastError) {
-                console.error("Error sending message:", chrome.runtime.lastError.message);
-              } else {
-                console.log("Message sent successfully:", response);
-              }
-            });
-          });
-      });
+    console.log("Sending summarize message...");
+    chrome.tabs.sendMessage(tabs[0].id, {
+      action: "summarizeContent",
+      focusInput: userInput.value
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("Error sending message:", chrome.runtime.lastError.message);
+      } else {
+        console.log("Summarize message response:", response);
+      }
+    });
   });
 });
 
@@ -82,20 +88,16 @@ document.getElementById('summarizeButton').addEventListener('click', async () =>
 document.getElementById('analyzeButton').addEventListener('click', async () => {
   const loadingSpinner = document.getElementById('loadingSpinner');
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-
-    // Fetches selected content from web page
     const pageContent = await chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
       func: getPageContent,
     });
 
-    // Filters out nonsense text
     const filteredText = pageContent[0].result
       .split('\n')
       .filter(line => (line.match(/ /g) || []).length >= 8)
       .join('\n');
 
-    // Check if pageContent is empty or over char max
     if (filteredText.length === 0 || filteredText.length > 4000) {
       const errorText = filteredText.length === 0
         ? "Text must be highlighted."
@@ -104,7 +106,6 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
       return;
     }
 
-    // Starts Loading Spinner and sends text to sidebar script
     loadingSpinner.style.display = 'inline-block';
     sendToSidebar(filteredText);
   });
@@ -127,46 +128,21 @@ function displayError(message) {
   errorMessage.innerText = message;
 }
 
-// Function to send data to sidebar for population
+// Function to send data to sidebar for analysis and population
 function sendToSidebar(pageData) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabId = tabs[0].id;
-    chrome.scripting.executeScript(
-      { target: { tabId: tabId }, files: ["./sidebar/content.js"] },
-      () => {
-        chrome.scripting.insertCSS(
-          { target: { tabId: tabId }, files: ["./sidebar/sidebar.css"] },
-          () => {
-            chrome.tabs.sendMessage(tabId, {
-              action: 'analyzeContent',
-              tabId: tabId,
-              pageData: pageData
-            }, (response) => {
-              if (chrome.runtime.lastError) {
-                console.error("Error sending message:", chrome.runtime.lastError);
-              } else {
-                console.log("Message sent successfully:", response);
-              }
-            });
-          });
+    console.log("Sending data for analysis...");
+    chrome.tabs.sendMessage(tabId, {
+      action: 'analyzeContent',
+      tabId: tabId,
+      pageData: pageData
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("Error sending message:", chrome.runtime.lastError);
+      } else {
+        console.log("Message sent successfully:", response);
       }
-    );
+    });
   });
 }
-
-// Listener for messages from sidebar
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
-  // Turns off loading circle when analysis is complete
-  if (request.action === "turnOffLoadingCircle") {
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    loadingSpinner.style.display = 'none';
-  }
-
-  // Actives analysis button when summary generation is complete
-  if (request.action === "activateAnalyzeButton") {
-    const analyzeButton = document.getElementById('analyzeButton');
-    analyzeButton.disabled = false;
-    analyzeButton.innerText = 'Analyze';
-  }
-});

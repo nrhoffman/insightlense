@@ -2,58 +2,54 @@ console.log("Content script loaded");
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const tabId = request.tabId;
 
-    // Displays the sidebar
-    if (request.action === "showSidebar") {
-        createSidebar(tabId);
-
-        // Checks if summary exists and notifies the popup script
-        const summary = document.getElementById('summary');
-        if (summary.innerText !== "") {
-            chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
-        }
-    }
-
-    // Populate the sidebar with summary
-    else if (request.action === 'summarizeContent') {
-        summarizeContent(request.focusInput);
-    }
-
-    // Populate the sidebar with analysis
-    else if (request.action === 'analyzeContent') {
-        analyzeContent(request.pageData);
-    }
-
-    // Display the fact check bubble
-    else if (request.action === 'displayBubble') {
-        displayFactCheckBubble(request.selectedText);
+    switch (request.action) {
+        case "showSidebar":
+            createSidebar();
+            checkSummaryAndNotify();
+            break;
+        case 'summarizeContent':
+            summarizeContent(request.focusInput);
+            break;
+        case 'analyzeContent':
+            analyzeContent(request.pageData);
+            break;
+        case 'displayBubble':
+            displayFactCheckBubble(request.selectedText);
+            break;
     }
 });
 
-// Function that creates the sidebar
-async function createSidebar(tabId) {
-    let sidebar = document.getElementById('insightSidebar');
+// Function that creates or shows the sidebar
+async function createSidebar() {
+    let sidebar = document.getElementById('insightSidebar') || createSidebarElement();
+    sidebar.style.display = 'block'; // Show the sidebar
 
-    // Creates sidebar if it doesn't exist yet
-    if (!sidebar) {
-        sidebar = document.createElement('div');
-        sidebar.id = 'insightSidebar';
-        sidebar.innerHTML = `
-            <button id="closeSidebarBtn">✖️</button>
-            <h3>Summary</h3>
-            <p id="summary"></p>
-            <h3>Analysis</h3>
-            <p id="analysis">Highlight text on webpage and click "Analyze" in the popup to analyze.</p>
-        `;
-        document.body.appendChild(sidebar);
+    // Event listener for close button
+    document.getElementById('closeSidebarBtn').addEventListener('click', () => {
+        sidebar.style.display = 'none';
+    });
+}
 
-        document.getElementById('closeSidebarBtn').addEventListener('click', () => {
-            sidebar.style.display = 'none';
-        });
-    } else {
-        sidebar.style.display = 'block'; // Show the sidebar if it already exists
-    }
+// Helper function to create sidebar element
+function createSidebarElement() {
+    const sidebar = document.createElement('div');
+    sidebar.id = 'insightSidebar';
+    sidebar.innerHTML = `
+        <button id="closeSidebarBtn">✖️</button>
+        <h3>Summary</h3>
+        <p id="summary"></p>
+        <h3>Analysis</h3>
+        <p id="analysis">Highlight text on webpage and click "Analyze" in the popup to analyze.</p>
+    `;
+    document.body.appendChild(sidebar);
+    return sidebar;
+}
+
+// Function checks if summary exists and notify popup
+function checkSummaryAndNotify() {
+    const summary = document.getElementById('summary');
+    if (summary.innerText !== "") { chrome.runtime.sendMessage({ action: "activateAnalyzeButton" }); }
 }
 
 // Function fills the sidebar with a summary
@@ -61,90 +57,64 @@ async function summarizeContent(focusInput) {
     const summary = document.getElementById('summary');
     summary.innerHTML = '';
 
+    const loadingSpinner = getOrCreateLoadingSpinner(summary);
+
+    const pageContent = await getPageContent();
+    const combinedSummary = await generateSummary(pageContent, focusInput);
+    loadingSpinner.remove();
+
+    summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
+    chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
+}
+
+// Helper function to get or create a loading spinner
+function getOrCreateLoadingSpinner(parent) {
     let loadingSpinner = document.getElementById('loadingSpinner');
     if (!loadingSpinner) {
         loadingSpinner = document.createElement('div');
         loadingSpinner.id = 'loadingSpinner';
         loadingSpinner.classList.add('spinner');
-        summary.parentElement.insertBefore(loadingSpinner, summary);
+        parent.parentElement.insertBefore(loadingSpinner, parent);
     }
-
-    // Fetches the page content
-    const pageContent = await getPageContent();
-    const maxChar = 3800;
-    let combinedSummary;
-
-    // If the page content exceeds max characters, it's broken up
-    if (pageContent.length > maxChar) {
-        const separateLines = pageContent
-            .split(/\r?\n|\r|\n/g)
-            .filter(line => (line.split(" ").length - 1) >= 3);
-        combinedSummary = await getSummary(separateLines, maxChar, focusInput);
-    }
-
-    // Else page content is summarized in one pass
-    else {
-        const summarizer = await ai.summarizer.create({
-            sharedContext: `Only output in English.
-                            Only output in trained language.
-                            Use paragraph form.
-                            Only summarize the content.
-                            Focus the summary on: "${focusInput}" if not blank.
-                            `
-        });
-        combinedSummary = await summarizer.summarize(pageContent);
-        summarizer.destroy();
-    }
-    loadingSpinner.remove();
-
-    // Populate summary portion of the sidebar
-    summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
-    chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
+    return loadingSpinner;
 }
 
 // Function that fetches the web page content
 async function getPageContent() {
-    const mainContent = document.querySelector('article, main, section.content, div.article, div.post, div.entry');
+    const mainContent = document.querySelector('article, main, section.content, div.article, div.post, div.entry') || document;
+    const contentElements = mainContent.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
 
-    let contentText = '';
-
-    if (mainContent) {
-        // Get only paragraphs and headers within the main content area
-        const contentElements = mainContent.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
-
-        contentElements.forEach(element => {
-            const text = element.innerText.trim();
-            if (text.length > 0) {
-                contentText += text + '\n';
-            }
-        });
-    } else {
-        // Fallback to capture standard elements if no specific container is found
-        const contentElements = document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
-        contentElements.forEach(element => {
-            const text = element.innerText.trim();
-            if (text.length > 0) {
-                contentText += text + '\n';
-            }
-        });
-    }
-
-    return contentText;
+    return Array.from(contentElements)
+        .map(element => element.innerText.trim())
+        .filter(text => text.length > 0)
+        .join('\n');
 }
 
-// Function that breaks web content into sections for summarization.
-// Then combines the summaries into one
+// Function that generates the summary
+async function generateSummary(pageContent, focusInput) {
+    const maxChar = 3800;
+    if (pageContent.length > maxChar) {
+        const separateLines = pageContent.split(/\r?\n|\r|\n/g).filter(line => line.split(" ").length - 1 >= 3);
+        return await getSummary(separateLines, maxChar, focusInput);
+    } else {
+        return await summarizePageContent(pageContent, focusInput);
+    }
+}
+
+// Helper function to summarize the page content in one pass
+async function summarizePageContent(pageContent, focusInput) {
+    const summarizer = await ai.summarizer.create({ sharedContext: getSummaryContext(focusInput) });
+    const combinedSummary = await summarizer.summarize(pageContent);
+    summarizer.destroy();
+    return combinedSummary;
+}
+
+// Function that breaks web content into sections for summarization
 async function getSummary(separateLines, maxChar, focusInput) {
     let pageArray = [];
     let curEl = '';
 
-    const summarizer = await ai.summarizer.create({
-        sharedContext: `Only output in English.
-                        Only output in trained language.
-                        Only summarize the content.
-                        Use paragraph form.
-                        Focus the summary on: "${focusInput}" if not blank.`
-    });
+    const summarizer = await ai.summarizer.create({ sharedContext: getSummaryContext(focusInput) });
 
     for (const line of separateLines) {
         if ((curEl + line).length < maxChar) {
@@ -156,17 +126,24 @@ async function getSummary(separateLines, maxChar, focusInput) {
         }
     }
 
-    // Summarize and add any remaining content
     if (curEl.trim().length > 0) {
         const summary = await summarizer.summarize(curEl.trim());
         pageArray.push(summary);
     }
 
-    // Combine all summaries and create a final summarization
-    const combinedSummaryInput = pageArray.join('\n'); // Join all summaries
+    const combinedSummaryInput = pageArray.join('\n');
     const combinedSummary = await summarizer.summarize(`Combine everything and summarize into a paragraph: ${combinedSummaryInput.trim()}`);
     summarizer.destroy();
     return combinedSummary;
+}
+
+// Helper function to get shared context for summarization
+function getSummaryContext(focusInput) {
+    return `Only output in English.
+            Only output in trained language.
+            Use paragraph form.
+            Only summarize the content.
+            Focus the summary on: "${focusInput}" if not blank.`;
 }
 
 // Function that populates the analysis portion of the sidebar
@@ -180,58 +157,51 @@ async function analyzeContent(pageData) {
     chrome.runtime.sendMessage({ action: "turnOffLoadingCircle" });
 }
 
+// Function that populates the analysis portion of the sidebar
+async function analyzeContent(pageData) {
+    const analysisContent = document.getElementById('analysis');
+    analysisContent.innerHTML = `<span>${await analyzePageText(pageData)}</span>`;
+    chrome.runtime.sendMessage({ action: "turnOffLoadingCircle" });
+}
+
 // Function that analyzes web page content
 async function analyzePageText(pageData) {
-    try {
-        const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-        if (available !== "no") {
-            const summaryEl = document.getElementById('summary');
-            const summary = summaryEl.textContent;
-            const session = await ai.languageModel.create({
-                systemPrompt: ` You will be given text to analyze with the given context: ${summary}
+    const summary = document.getElementById('summary').textContent;
+    const session = await ai.languageModel.create({ systemPrompt: getAnalysisPrompt(summary) });
 
-                                Only use English.
-                                Ignore text you're not trained on.
-                                Don't output language you're not trained on.
-                                Bold Titles.
-                                Analyze the text and output in this exact format without including what's in parantheses:
-                                    1. Attributes:
-                                    - Sentiment(e.g., Positive, Negative, Neutral): Explanation
-                                    - Emotion(What emotion can be interpreted from the text): Explanation
-                                    - Toxicity(e.g., High, Moderate, Low, None): Explanation
-                                    - Truthfulness(e.g., High, Moderate, Low, Uncertain): Explanation
-                                    - Bias(e.g., High, Moderate, Low, None): Explanation
-                                    
-                                    2. Logical Falacies: (Identify any logical fallacies present and provide a brief explanation for each)
-                                    - [List of logical fallacies and explanations]
-                                    
-                                    3. Ulterior Motives: (Assess if there are any ulterior motives behind the text and explain)
-                                    - [List of potential ulterior motives]
+    const result = await session.prompt(`Analyze: "${pageData}"`);
+    session.destroy();
+    
+    return formatTextResponse(result);
+}
 
-                                    4. Overall Analysis: (Provide an overall analysis of the text)
-                                    - [Detailed analysis of the implications and context of the text]
-                                
-                                Again: Do NOT include what is in parantheses in the format.
-                            `
-            });
+// Helper function to get the analysis prompt
+function getAnalysisPrompt(summary) {
+    return `You will be given text to analyze with the given context: ${summary}
 
-            // Fetch result - Further lines format the result properly
-            const result = await session.prompt(`Analyze: "${pageData}"`);
+            Only use English.
+            Ignore text you're not trained on.
+            Don't output language you're not trained on.
+            Bold Titles.
+            Analyze the text and output in this exact format without including what's in parantheses:
+                1. Attributes:
+                - Sentiment(e.g., Positive, Negative, Neutral): Explanation
+                - Emotion(What emotion can be interpreted from the text): Explanation
+                - Toxicity(e.g., High, Moderate, Low, None): Explanation
+                - Truthfulness(e.g., High, Moderate, Low, Uncertain): Explanation
+                - Bias(e.g., High, Moderate, Low, None): Explanation
+                
+                2. Logical Falacies: (Identify any logical fallacies present and provide a brief explanation for each)
+                - [List of logical fallacies and explanations]
+                
+                3. Ulterior Motives: (Assess if there are any ulterior motives behind the text and explain)
+                - [List of potential ulterior motives]
 
-            htmlData = formatTextReponse(result);
-
-            // Destroy session
-            session.destroy();
-
-            return htmlData;
-        }
-    } catch (error) {
-        if (error.message === "Other generic failures occurred.") {
-            return `Other generic failures occurred. Retrying...`;
-        }
-        console.error("Error generating content:", error);
-        return error.message;
-    }
+                4. Overall Analysis: (Provide an overall analysis of the text)
+                - [Detailed analysis of the implications and context of the text]
+            
+            Again: Do NOT include what is in parantheses in the format.
+        `;
 }
 
 // Function that displays fact check bubble
@@ -252,17 +222,14 @@ async function displayFactCheckBubble(selectedText) {
 
     const summaryEl = document.getElementById('summary');
     const summary = summaryEl.textContent;
+    
+    // Close bubble on click
+    bubble.addEventListener("dblclick", () => bubble.remove());
+    makeBubbleDraggable(bubble);
 
     // Error message if the summary is empty
     if (summaryEl.innerText === "") {
-        bubble.style.color = 'red';
-        bubble.innerHTML = `
-        <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">Wait until summary generation completes.</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
+        displayErrorMessage(bubble);
         return;
     }
     else { bubble.style.color = '#ffffff'; }
@@ -276,32 +243,18 @@ async function displayFactCheckBubble(selectedText) {
     </footer>
     `;
 
-    makeBubbleDraggable(bubble);
-
     let result = '';
     try {
         const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
         if (available !== "no") {
             const session = await ai.languageModel.create({
-                systemPrompt: ` You will be given text to fact-check with the given context: ${summary}
-
-                                Only use English.
-                                Ignore text you're not trained on.
-                                Don't output language you're not trained on.
-                                Bold Titles.
-                                Fact check the text and output in this exact format without including what's in parantheses:
-                                    Fact Check Result: (True, Partially True, False, Unverified, Opinion)
-
-                                    Explanation: (Give an explanation of the fact check)
-                                
-                                Again: Do NOT include what is in parantheses in the format.
-                            `
+                systemPrompt: getFactCheckPrompt(summary)
             });
 
             // Fetch result - Further lines format the result properly
             result = await session.prompt(`Analyze: "${selectedText}"`);
 
-            result = formatTextReponse(result);
+            result = formatTextResponse(result);
 
             session.destroy();
         }
@@ -321,9 +274,6 @@ async function displayFactCheckBubble(selectedText) {
         <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
     </footer>
     `;
-
-    // Close bubble on click
-    bubble.addEventListener("dblclick", () => bubble.remove());
 }
 
 // Function to make the bubble draggable
@@ -357,8 +307,35 @@ function makeBubbleDraggable(bubble) {
     });
 }
 
+function displayErrorMessage(bubble){
+    bubble.style.color = 'red';
+    bubble.innerHTML = `
+    <div class="bubble-title">Fact Checker</div>
+    <div class="bubble-content">Error: Wait until summary generation completes.</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+}
+
+function getFactCheckPrompt(summary) {
+    return `You will be given text to fact-check with the given context: ${summary}
+
+            Only use English.
+            Ignore text you're not trained on.
+            Don't output language you're not trained on.
+            Bold Titles.
+            Fact check the text and output in this exact format without including what's in parantheses:
+                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
+
+                Explanation: (Give an explanation of the fact check)
+            
+            Again: Do NOT include what is in parantheses in the format.
+        `;
+}
+
 // Function that formats response from model
-function formatTextReponse(response) {
+function formatTextResponse(response) {
     // Replace `##text` with ``
     let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
 
