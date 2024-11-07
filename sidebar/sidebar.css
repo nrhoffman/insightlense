@@ -51,9 +51,9 @@
 }
 
 /* Sidebar Content Styling */
-#insightSidebar p {
-    font-size: 0.9em;
-    color: white;
+#insightSidebar * {
+    font-size: 1.0em;
+    color: white !important;
 }
 
 #insightSidebar p:hover {

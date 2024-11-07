@@ -1,9 +1,13 @@
 console.log("Content script loaded");
+let modelInstance = null;
+let pageContent = null;
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     switch (request.action) {
+        case "initializeModel":
+            initializeModel();
         case "showSidebar":
             createSidebar();
             checkSummaryAndNotify();
@@ -14,11 +18,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'analyzeContent':
             analyzeContent(request.pageData);
             break;
+        case 'getChatBotOutput':
+            getChatBotOutput(request.chatInput);
+            break;
         case 'displayBubble':
             displayFactCheckBubble(request.selectedText);
             break;
     }
 });
+
+// Function to initialize the model
+async function initializeModel() {
+    try {
+        if (!modelInstance) {
+            console.log("Initializing model...");
+
+            // Request page content
+            pageContent = await getPageContent();
+
+            const maxChar = 3800;
+            let result = null;
+
+            // If page content exceeds maxChar, process it in chunks
+            if (pageContent.length > maxChar) {
+                let curEl = '';
+                const separateLines = pageContent.split(/\r?\n|\r|\n/g).filter(line => line.split(" ").length - 1 >= 3);
+
+                for (const line of separateLines) {
+                    if ((curEl + line).length < maxChar) {
+                        curEl += line + '\n';
+                    } else {
+                        if (!modelInstance) {
+                            modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(curEl) });
+                        } else {
+                            result = await modelInstance.prompt(getPrompt(curEl));
+                        }
+                        curEl = line + '\n';
+                    }
+                }
+
+                // Process any remaining content
+                if (curEl.trim().length > 0) {
+                    result = await modelInstance.prompt(getPrompt(curEl));
+                }
+            } else {
+                // Initialize the model directly with full content if within maxChar
+                modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(pageContent) });
+            }
+
+            console.log("Model Initialized...");
+        } else { console.log("Using existing model..."); }
+    } catch (error) {
+        console.error("Error initializing model:", error);
+    }
+
+    chrome.runtime.sendMessage({ action: "activateSendButton" });
+}
+
+function getPrompt(pageContent) {
+    return `You are a chatbot that will answer questions about content given.
+            Keep responses short.
+            Remember enough to answer questions later: ${pageContent}`;
+}
 
 // Function that creates or shows the sidebar
 async function createSidebar() {
@@ -59,8 +120,7 @@ async function summarizeContent(focusInput) {
 
     const loadingSpinner = getOrCreateLoadingSpinner(summary);
 
-    const pageContent = await getPageContent();
-    const combinedSummary = await generateSummary(pageContent, focusInput);
+    const combinedSummary = await generateSummary(focusInput);
     loadingSpinner.remove();
 
     summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
@@ -81,36 +141,83 @@ function getOrCreateLoadingSpinner(parent) {
 
 // Function that fetches the web page content
 async function getPageContent() {
-    const mainContent = document.querySelector('article, main, section.content, div.article, div.post, div.entry') || document;
-    const contentElements = mainContent.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+    let mainContent = document.querySelectorAll('article, main, section, div');
+    const contentTemp =  Array.from(mainContent)
+                        .filter(element => {
+                            // Exclude elements with classes typically associated with non-main content
+                            const className = element.className.toLowerCase();
+                            if (className === '') {
+                                return false;
+                            }
+                            const isSidebarOrNav = className.includes('sidebar') || className.includes('widget') ||
+                                                className.includes('related') || className.includes('nav') ||
+                                                className.includes('footer') || className.includes('advert') ||
+                                                className.includes('recirc') || className.includes('ad');
+                            return !isSidebarOrNav
+                        });
 
-    return Array.from(contentElements)
-        .map(element => element.innerText.trim())
-        .filter(text => text.length > 0)
-        .join('\n');
+    const contentElements = contentTemp.flatMap(element => 
+        Array.from(element.querySelectorAll('p, a, h1, h2, h3, h4, h5, h6, li, blockquote, span, figcaption, em'))
+        .filter(childElement => {
+            // Check if the current element or its parent contains 'sidebar' or any other unwanted class
+            const currentElementClass = childElement.className.toLowerCase();
+            const parentElement = childElement.parentElement;
+            const parentClass = parentElement ? parentElement.className.toLowerCase() : '';
+            
+            const isCurrentElementSidebar = currentElementClass.includes('sidebar') || currentElementClass.includes('widget') ||
+                                           currentElementClass.includes('related') || currentElementClass.includes('nav') ||
+                                           currentElementClass.includes('footer') || currentElementClass.includes('advert') ||
+                                           currentElementClass.includes('toolbar') || currentElementClass.includes('aside') ||
+                                           currentElementClass.includes('ad') || currentElementClass.includes('comment') ||
+                                           currentElementClass.includes('card') || currentElementClass.includes('episode') ||
+                                           currentElementClass.includes('tag') || currentElementClass.includes('recommend');
+    
+            const isParentSidebar = parentClass.includes('sidebar') || parentClass.includes('widget') ||
+                                   parentClass.includes('related') || parentClass.includes('nav') ||
+                                   parentClass.includes('footer') || parentClass.includes('advert') ||
+                                   parentClass.includes('toolbar') || parentClass.includes('aside') ||
+                                   parentClass.includes('ad') || parentClass.includes('comment') ||
+                                   parentClass.includes('card') || parentClass.includes('episode') ||
+                                   parentClass.includes('tag') || parentClass.includes('recommend');
+    
+            return !isCurrentElementSidebar && !isParentSidebar; // Exclude if either the current element or its parent is a sidebar or similar
+    }));
+    console.log(contentElements)
+    const contentClean =  Array.from(contentElements)
+                        .map(element => {
+                            let cleanedText = element.innerText.trim(); // Remove leading/trailing space
+                            cleanedText = cleanedText.replace(/\s+/g, ' ').replace(/\n+/g, ' ');
+                            return cleanedText.length > 0 ? cleanedText : '';
+                        })
+                        .filter(text => text.length > 0)
+                        .filter(text => text.split(/\s+/).length >= 5);
+    const uniqueContent = Array.from(new Set(contentClean)).join('\n');
+    console.log(uniqueContent);
+    return uniqueContent;
 }
 
-// Function that generates the summary
-async function generateSummary(pageContent, focusInput) {
+// Function that passes page content to summarization model
+async function generateSummary(focusInput) {
     const maxChar = 3800;
     if (pageContent.length > maxChar) {
         const separateLines = pageContent.split(/\r?\n|\r|\n/g).filter(line => line.split(" ").length - 1 >= 3);
-        return await getSummary(separateLines, maxChar, focusInput);
+        return await summarizeLargePageContent(separateLines, maxChar, focusInput);
     } else {
-        return await summarizePageContent(pageContent, focusInput);
+
+        return await summarizePageContent(focusInput);
     }
 }
 
 // Helper function to summarize the page content in one pass
-async function summarizePageContent(pageContent, focusInput) {
+async function summarizePageContent(focusInput) {
     const summarizer = await ai.summarizer.create({ sharedContext: getSummaryContext(focusInput) });
-    const combinedSummary = await summarizer.summarize(pageContent);
+    const summary = await summarizer.summarize(pageContent);
     summarizer.destroy();
-    return combinedSummary;
+    return summary;
 }
 
 // Function that breaks web content into sections for summarization
-async function getSummary(separateLines, maxChar, focusInput) {
+async function summarizeLargePageContent(separateLines, maxChar, focusInput) {
     let pageArray = [];
     let curEl = '';
 
@@ -120,29 +227,62 @@ async function getSummary(separateLines, maxChar, focusInput) {
         if ((curEl + line).length < maxChar) {
             curEl += line + '\n';
         } else {
-            const summary = await summarizer.summarize(curEl.trim());
+            console.log("current: ", curEl);
+            const summary = await getSummary(summarizer, curEl);
             pageArray.push(summary);
             curEl = line + '\n';
         }
     }
 
     if (curEl.trim().length > 0) {
-        const summary = await summarizer.summarize(curEl.trim());
+        console.log("last: ", curEl);
+        const summary = await getSummary(summarizer, prompt);
         pageArray.push(summary);
     }
 
     const combinedSummaryInput = pageArray.join('\n');
-    const combinedSummary = await summarizer.summarize(`Combine everything and summarize into a paragraph: ${combinedSummaryInput.trim()}`);
+    const combinedPrompt = `Figure out main topic and summarize into a paragraph: ${combinedSummaryInput.trim()}`;
+    const combinedSummary = await getSummary(summarizer, combinedPrompt);
     summarizer.destroy();
     return combinedSummary;
 }
 
+// Function that generates the summary
+async function getSummary(summarizer, prompt, retries = 5, delay = 1000){
+    let summary = '';
+    let attempt = 0;
+
+    while (attempt < retries) {
+        try {
+             summary = await summarizer.summarize(prompt);
+            break;
+        } catch (error) {
+            console.log(`Error summarizing content on attempt ${attempt + 1}:`, error);
+            attempt++;
+            if (attempt < retries) {
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay)); // Exponential backoff
+                delay *= 2; // Increase delay for exponential backoff
+            } else {
+                console.log("Max retries reached. Returning empty summary.");
+                summary = "Summary failed after multiple attempts.";
+            }
+        }
+    }
+
+    return summary;
+}
+
 // Helper function to get shared context for summarization
 function getSummaryContext(focusInput) {
-    return `Only output in English.
-            Only output in trained language.
+    const domain = window.location.hostname;
+    return `Domain content is coming from: ${domain}.
+            Mention where the content is coming from using domain provided.
+            Only output in English.
+            Only output in trained format and language.
             Use paragraph form.
             Only summarize the content.
+            Keep the summary short.
             Focus the summary on: "${focusInput}" if not blank.`;
 }
 
@@ -171,7 +311,7 @@ async function analyzePageText(pageData) {
 
     const result = await session.prompt(`Analyze: "${pageData}"`);
     session.destroy();
-    
+
     return formatTextResponse(result);
 }
 
@@ -204,6 +344,12 @@ function getAnalysisPrompt(summary) {
         `;
 }
 
+// Function that gets
+async function getChatBotOutput(input) {
+    const result = await modelInstance.prompt(input);
+    chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
+}
+
 // Function that displays fact check bubble
 async function displayFactCheckBubble(selectedText) {
     let bubble = document.querySelector(".factCheckBubble");
@@ -222,7 +368,7 @@ async function displayFactCheckBubble(selectedText) {
 
     const summaryEl = document.getElementById('summary');
     const summary = summaryEl.textContent;
-    
+
     // Close bubble on click
     bubble.addEventListener("dblclick", () => bubble.remove());
     makeBubbleDraggable(bubble);
@@ -307,7 +453,7 @@ function makeBubbleDraggable(bubble) {
     });
 }
 
-function displayErrorMessage(bubble){
+function displayErrorMessage(bubble) {
     bubble.style.color = 'red';
     bubble.innerHTML = `
     <div class="bubble-title">Fact Checker</div>

@@ -1,17 +1,46 @@
 // Listener for messages from sidebar
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  const sendButton = document.getElementById('sendButton');
+  const chatWindow = document.getElementById('chatWindow');
+  const outputElement = document.createElement('p');
+  outputElement.className = 'bot-p';
 
-  // Turns off loading circle when analysis is complete
-  if (request.action === "turnOffLoadingCircle") {
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    loadingSpinner.style.display = 'none';
-  }
+  switch (request.action) {
+    // Turns off loading circle when analysis is complete
+    case "turnOffLoadingCircle":
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      loadingSpinner.style.display = 'none';
+      document.getElementById('loadingContainer').classList.remove('active');
+      break;
 
-  // Actives analysis button when summary generation is complete
-  if (request.action === "activateAnalyzeButton") {
-    const analyzeButton = document.getElementById('analyzeButton');
-    analyzeButton.disabled = false;
-    analyzeButton.innerText = 'Analyze';
+    // Activates analysis button when summary generation is complete
+    case "activateAnalyzeButton":
+      const analyzeButton = document.getElementById('analyzeButton');
+      analyzeButton.disabled = false;
+      analyzeButton.innerText = 'Analyze';
+      break;
+
+    // Activates chat bot send button when model is ready
+    case "activateSendButton":
+      sendButton.disabled = false;
+      chatWindow.innerHTML = '';
+      outputElement.textContent = `Chatbot: I'm ready for any questions.`;
+
+      // Append the new output element to the chat window
+      chatWindow.appendChild(outputElement);
+      break;
+
+    // Adds output message to chat
+    case "setChatBotOutput":
+      sendButton.disabled = false;
+      outputElement.textContent = `Chatbot: ${request.output}`;
+
+      // Append the new output element to the chat window
+      chatWindow.appendChild(outputElement);
+
+      // Scroll to the bottom of the chat window
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      break;
   }
 });
 
@@ -33,7 +62,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   // Fetches selected content from web page
   const pageContent = await chrome.scripting.executeScript({
     target: { tabId: tabs[0].id },
-    func: getPageContent,
+    func: getSelectionContent,
   });
 
   // Checks the amount of characters selected
@@ -49,16 +78,12 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     currentCharCount.innerText = `(Current Characters Selected: 0)`;
   }
 
-  // Send the message to show sidebar after script injection
-  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error("Error sending message:", chrome.runtime.lastError.message);
-    } else {
-      console.log("Message sent successfully:", response);
-    }
-  });
-});
+  // Send the message to initialize model
+  chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
 
+  // Send the message to show sidebar after script injection
+  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
+});
 
 // Summarize button is pressed
 document.getElementById('summarizeButton').addEventListener('click', async () => {
@@ -71,16 +96,7 @@ document.getElementById('summarizeButton').addEventListener('click', async () =>
     analyzeButton.disabled = true;
 
     console.log("Sending summarize message...");
-    chrome.tabs.sendMessage(tabs[0].id, {
-      action: "summarizeContent",
-      focusInput: userInput.value
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("Error sending message:", chrome.runtime.lastError.message);
-      } else {
-        console.log("Summarize message response:", response);
-      }
-    });
+    chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
   });
 });
 
@@ -90,7 +106,7 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const pageContent = await chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
-      func: getPageContent,
+      func: getSelectionContent,
     });
 
     const filteredText = pageContent[0].result
@@ -107,12 +123,40 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
     }
 
     loadingSpinner.style.display = 'inline-block';
+    document.getElementById('loadingContainer').classList.add('active');
     sendToSidebar(filteredText);
   });
 });
 
+// Send button for chat bot is pressed
+document.getElementById('sendButton').addEventListener('click', async () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    const userInput = document.getElementById('chatInput');
+    const chatWindow = document.getElementById('chatWindow');
+    const input = userInput.value;
+    userInput.value = '';
+
+    // Update Send Button State
+    const sendButton = document.getElementById('sendButton');
+    sendButton.disabled = true;
+
+    // Create a new paragraph element for the input
+    const inputElement = document.createElement('p');
+    inputElement.className = 'user-p';
+    inputElement.textContent = `User: ${input}`;
+
+    // Append the new output element to the chat window
+    chatWindow.appendChild(inputElement);
+
+    // Scroll to the bottom of the chat window
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
+  });
+});
+
 // Function to fetch the selected content of the webpage
-function getPageContent() {
+function getSelectionContent() {
   const contentElements = window.getSelection();
   return contentElements.toString();
 }
@@ -133,16 +177,6 @@ function sendToSidebar(pageData) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabId = tabs[0].id;
     console.log("Sending data for analysis...");
-    chrome.tabs.sendMessage(tabId, {
-      action: 'analyzeContent',
-      tabId: tabId,
-      pageData: pageData
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("Error sending message:", chrome.runtime.lastError);
-      } else {
-        console.log("Message sent successfully:", response);
-      }
-    });
+    chrome.tabs.sendMessage(tabId, { action: 'analyzeContent', tabId: tabId, pageData: pageData });
   });
 }
