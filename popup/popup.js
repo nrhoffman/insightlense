@@ -208,11 +208,17 @@ function getSelectionContent() {
 
 // Function to display error when analyze button is pressed and conditions are met
 function displayError(message) {
+  const analyzeBoxContainer = document.querySelector('.box-container:nth-of-type(2)');
   let errorMessage = document.querySelector('.error-message');
   if (!errorMessage) {
     errorMessage = document.createElement('div');
     errorMessage.classList.add('error-message');
-    document.querySelector('.popup-container').insertBefore(errorMessage, document.getElementById('analyzeButton'));
+    errorMessage.style.color = 'red';
+    errorMessage.style.marginBottom = '10px';
+    errorMessage.style.textAlign = 'center';
+    errorMessage.style.fontSize = '1em';
+    errorMessage.style.fontWeight = '500';
+    analyzeBoxContainer.insertBefore(errorMessage, analyzeButton);
   }
   errorMessage.innerText = message;
 }

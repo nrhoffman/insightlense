@@ -353,7 +353,7 @@ async function analyzePageText(pageData, retries = 5, delay = 1000) {
             result = await session.prompt(`Analyze: "${pageData}"`);
             break;
         } catch (error) {
-            console.log(`Error summarizing content on attempt ${attempt + 1}:`, error);
+            console.log(`Error analyzing content on attempt ${attempt + 1}:`, error);
             attempt++;
             if (attempt < retries) {
                 console.log(`Retrying in ${delay}ms...`);
