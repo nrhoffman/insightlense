@@ -34,10 +34,10 @@
         "<all_urls>"
       ],
       "js": [
-        "./sidebar/content.js"
+        "./content/content.js"
       ],
       "css": [
-        "./sidebar/content.css"
+        "./content/content.css"
       ],
       "run_at": "document_start"
     }

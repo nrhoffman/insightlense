@@ -20,13 +20,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Inject the content script
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["./sidebar/content.js"]
+        files: ["./content/content.js"]
     });
 
     // Inject the CSS
     await chrome.scripting.insertCSS({
         target: { tabId: tab.id },
-        files: ["./sidebar/content.css"]
+        files: ["./content/content.css"]
     });
 
     // Define Button is pushed
