@@ -1,5 +1,6 @@
 /* Bubble Styling */
-#factCheckBubble {
+#factCheckBubble,
+#analysisBubble {
     position: absolute;
     background-color: rgba(20, 20, 20, 0.95);
     border: 1px 1px solid #444;
@@ -22,9 +23,11 @@
 
 .bubble-content {
     font-size: 14px;
+    margin-top: 10px;
 }
 
-#factCheckBubble:hover {
+#factCheckBubble:hover,
+#analysisBubble:hover {
     cursor: pointer;
     opacity: 0.9;
 }
@@ -36,4 +39,29 @@
     color: #bbb;
     margin-top: 20px;
     padding-top: 10px;
+}
+
+/* Analyze Button Styling */
+#analyzeButton {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #4caf50;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s box-shadow 0.3s;
+    outline: none;
+    margin-top: 10px;
+  }
+
+#analyzeButton:hover {
+  background-color: #45a049;
+  transform: scale(1.02);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+#analyzeButton:focus{
+  outline: 2px solid #4caf50;
 }

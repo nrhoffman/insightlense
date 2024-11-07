@@ -24,8 +24,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
             break;
-        case 'displayBubble':
-            displayFactCheckBubble(request.selectedText);
+        case 'displayFactCheckBubble':
+            displayBubble(request.selectedText, 'factCheckBubble');
+            break;
+        case 'displayAnalysisBubble':
+            displayBubble(request.selectedText, 'analysisBubble');
             break;
         case 'getStatuses':
             sendResponse({
@@ -38,6 +41,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
     }
 });
+
+// Event listeners for updating the character count
+document.addEventListener("mouseup", updateCharacterCount);
+document.addEventListener("keyup", updateCharacterCount);
 
 // Function to initialize the model
 async function initializeModel() {
@@ -141,7 +148,7 @@ function createSidebarElement() {
         <h3>Summary</h3>
         <p id="summary"></p>
         <h3>Analysis</h3>
-        <p id="analysis">Highlight text on webpage and click "Analyze" in the popup to analyze.</p>
+        <p id="analysis">Highlight text, right click, and "Analyze".</p>
     `;
     document.body.appendChild(sidebar);
     return sidebar;
@@ -225,7 +232,6 @@ async function getPageContent() {
 
                 return !isCurrentElementSidebar && !isParentSidebar; // Exclude if either the current element or its parent is a sidebar or similar
             }));
-    console.log(contentElements)
     const contentClean = Array.from(contentElements)
         .map(element => {
             let cleanedText = element.innerText.trim(); // Remove leading/trailing space
@@ -235,7 +241,6 @@ async function getPageContent() {
         .filter(text => text.length > 0)
         .filter(text => text.split(/\s+/).length >= 5);
     const uniqueContent = Array.from(new Set(contentClean)).join('\n');
-    console.log(uniqueContent);
     return uniqueContent;
 }
 
@@ -270,7 +275,7 @@ async function summarizeLargePageContent(separateLines, maxChar, focusInput) {
         if ((curEl + line).length < maxChar) {
             curEl += line + '\n';
         } else {
-            console.log("current: ", curEl);
+
             const summary = await getSummary(summarizer, curEl);
             pageArray.push(summary);
             curEl = line + '\n';
@@ -278,7 +283,7 @@ async function summarizeLargePageContent(separateLines, maxChar, focusInput) {
     }
 
     if (curEl.trim().length > 0) {
-        console.log("last: ", curEl);
+
         const summary = await getSummary(summarizer, prompt);
         pageArray.push(summary);
     }
@@ -329,13 +334,191 @@ function getSummaryContext(focusInput) {
             Focus the summary on: "${focusInput}" if not blank.`;
 }
 
+// Function that gets
+async function getChatBotOutput(input) {
+    const result = await modelInstance.prompt(input);
+    chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
+}
+
+// Function that displays fact check bubble
+async function displayBubble(selectedText, type) {
+    let bubble = document.querySelector(`.${type}`);
+    if (!bubble) {
+        bubble = document.createElement("div");
+        bubble.id = `${type}`;
+        bubble.classList.add(`${type}`);
+        document.body.appendChild(bubble);
+    }
+
+    // Get selection position to place bubble
+    const selection = window.getSelection();
+    const range = selection.getRangeAt(0).getBoundingClientRect();
+    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
+    bubble.style.left = `${window.scrollX + range.left}px`;
+
+    const summaryEl = document.getElementById('summary');
+    const summary = summaryEl.textContent;
+
+    // Close bubble on click
+    bubble.addEventListener("dblclick", () => bubble.remove());
+    makeBubbleDraggable(bubble);
+
+    // Error message if the summary is empty
+    if (summaryEl.innerText === "") {
+        displayErrorMessage(bubble);
+        return;
+    }
+    else { bubble.style.color = '#ffffff'; }
+
+    if (type === 'factCheckBubble') { await fillInFactCheckBubble(bubble, summary, selectedText); }
+    else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble, summary, selectedText); }
+}
+
+// Function to make the bubble draggable
+function makeBubbleDraggable(bubble) {
+    let offsetX, offsetY;
+
+    bubble.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        isDragging = true;
+
+        // Calculate the offset
+        offsetX = e.clientX - bubble.getBoundingClientRect().left;
+        offsetY = e.clientY - bubble.getBoundingClientRect().top;
+
+        const onMouseMove = (e) => {
+            if (isDragging) {
+                // Update bubble's position based on mouse movement
+                bubble.style.left = `${e.pageX - offsetX}px`;
+                bubble.style.top = `${e.pageY - offsetY}px`;
+            }
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+            isDragging = false;
+        };
+
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
+    });
+}
+
+function displayErrorMessage(bubble) {
+    bubble.style.color = 'red';
+    bubble.innerHTML = `
+    <div class="bubble-title">Error</div>
+    <div class="bubble-content">Wait until summary generation completes.</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+}
+
+async function fillInFactCheckBubble(bubble, summary, selectedText) {
+    // Placeholder text while loading fact check result
+    bubble.innerHTML = `
+    <div class="bubble-title">Fact Checker</div>
+    <div class="bubble-content">Checking facts...</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+
+    let result = '';
+    try {
+        const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
+        if (available !== "no") {
+            const session = await ai.languageModel.create({
+                systemPrompt: getFactCheckPrompt(summary)
+            });
+
+            // Fetch result - Further lines format the result properly
+            result = await session.prompt(`Analyze: "${selectedText}"`);
+
+            result = formatTextResponse(result);
+
+            session.destroy();
+        }
+    } catch (error) {
+        if (error.message === "Other generic failures occurred.") {
+            result = `Other generic failures occurred. Retrying...`;
+        }
+        else { result = error.message; }
+        console.error("Error generating content:", error);
+    }
+
+    bubble.innerHTML = '';
+    bubble.innerHTML = `
+    <div class="bubble-title">Fact Checker</div>
+    <div class="bubble-content">${result || "Error fetching result."}</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+}
+
+function getFactCheckPrompt(summary) {
+    return `You will be given text to fact-check with the given context: ${summary}
+
+            Only use English.
+            Ignore text you're not trained on.
+            Don't output language you're not trained on.
+            Bold Titles.
+            Fact check the text and output in this exact format without including what's in parantheses:
+                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
+
+                Explanation: (Give an explanation of the fact check)
+            
+            Again: Do NOT include what is in parantheses in the format.
+        `;
+}
+
+function fillInAnalysisBubble(bubble, summary, selectedText) {
+    bubble.innerHTML = '';
+    bubble.innerHTML = `
+    <div class="bubble-title">Analyze</div>
+    <div class="bubble-content">
+        <div id="bubbleText">Max Character Count: 4000</div>
+        <div id="currentCharCount">Current Characters Selected: 0</div>
+        <button id="analyzeButton">Analyze</button>
+    </div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+
+    // Analyze button is pressed
+    bubble.querySelector('#analyzeButton').addEventListener('click', async () => {
+        const analysisText = document.getElementById('analysis');
+        analysisText.innerHTML = '';
+        const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
+        
+        const filteredText = selectedText
+            .split('\n')
+            .filter(line => (line.match(/ /g) || []).length >= 8)
+            .join('\n');
+
+        if (filteredText.length === 0 || filteredText.length > 4000) {
+            const errorText = filteredText.length === 0
+                ? "Text must be highlighted."
+                : "Selected characters must be under 4000.";
+            displayError(errorText);
+            return;
+        }
+
+        bubble.remove();
+        await analyzeContent(filteredText);
+        loadingSpinner.remove();
+    });
+}
+
 // Function that populates the analysis portion of the sidebar
 async function analyzeContent(pageData) {
     analysisReady = false;
     const analysisContent = document.getElementById('analysis');
     analysisContent.innerHTML = `<span>${await analyzePageText(pageData)}</span>`;
-    chrome.runtime.sendMessage({ action: "turnOffLoadingCircle" });
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     analysisReady = true;
 }
 
@@ -400,140 +583,48 @@ function getAnalysisPrompt(summary) {
         `;
 }
 
-// Function that gets
-async function getChatBotOutput(input) {
-    const result = await modelInstance.prompt(input);
-    chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
-}
+// Function to update the character count
+function updateCharacterCount() {
+    currentElementClass = document.getElementById("currentCharCount");
+    if (currentElementClass) {
+        const selectedText = window.getSelection().toString();
+        let characterCount = 0;
 
-// Function that displays fact check bubble
-async function displayFactCheckBubble(selectedText) {
-    let bubble = document.querySelector(".factCheckBubble");
-    if (!bubble) {
-        bubble = document.createElement("div");
-        bubble.id = "factCheckBubble";
-        bubble.classList.add("factCheckBubble");
-        document.body.appendChild(bubble);
-    }
+        try { characterCount = selectedText.length; }
+        catch (error) { return; }
 
-    // Get selection position to place bubble
-    const selection = window.getSelection();
-    const range = selection.getRangeAt(0).getBoundingClientRect();
-    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
-    bubble.style.left = `${window.scrollX + range.left}px`;
-
-    const summaryEl = document.getElementById('summary');
-    const summary = summaryEl.textContent;
-
-    // Close bubble on click
-    bubble.addEventListener("dblclick", () => bubble.remove());
-    makeBubbleDraggable(bubble);
-
-    // Error message if the summary is empty
-    if (summaryEl.innerText === "") {
-        displayErrorMessage(bubble);
-        return;
-    }
-    else { bubble.style.color = '#ffffff'; }
-
-    // Placeholder text while loading fact check result
-    bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">Checking facts...</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-
-    let result = '';
-    try {
-        const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-        if (available !== "no") {
-            const session = await ai.languageModel.create({
-                systemPrompt: getFactCheckPrompt(summary)
-            });
-
-            // Fetch result - Further lines format the result properly
-            result = await session.prompt(`Analyze: "${selectedText}"`);
-
-            result = formatTextResponse(result);
-
-            session.destroy();
-        }
-    } catch (error) {
-        if (error.message === "Other generic failures occurred.") {
-            result = `Other generic failures occurred. Retrying...`;
-        }
-        else { result = error.message; }
-        console.error("Error generating content:", error);
-    }
-
-    bubble.innerHTML = '';
-    bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">${result || "Error fetching result."}</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-}
-
-// Function to make the bubble draggable
-function makeBubbleDraggable(bubble) {
-    let offsetX, offsetY;
-
-    bubble.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        isDragging = true;
-
-        // Calculate the offset
-        offsetX = e.clientX - bubble.getBoundingClientRect().left;
-        offsetY = e.clientY - bubble.getBoundingClientRect().top;
-
-        const onMouseMove = (e) => {
-            if (isDragging) {
-                // Update bubble's position based on mouse movement
-                bubble.style.left = `${e.pageX - offsetX}px`;
-                bubble.style.top = `${e.pageY - offsetY}px`;
+        if (characterCount > 0) {
+            currentElementClass.innerText = `Current Characters Selected: ${characterCount}`;
+            if (characterCount > 4000) {
+                currentElementClass.style.color = 'red';
+            } else {
+                currentElementClass.style.color = 'white';
             }
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener("mousemove", onMouseMove);
-            document.removeEventListener("mouseup", onMouseUp);
-            isDragging = false;
-        };
-
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
-    });
+        }
+    }
 }
 
-function displayErrorMessage(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">Error: Wait until summary generation completes.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
+// Function to fetch the selected content of the webpage
+function getSelectionContent() {
+    const contentElements = window.getSelection();
+    return contentElements.toString();
 }
 
-function getFactCheckPrompt(summary) {
-    return `You will be given text to fact-check with the given context: ${summary}
-
-            Only use English.
-            Ignore text you're not trained on.
-            Don't output language you're not trained on.
-            Bold Titles.
-            Fact check the text and output in this exact format without including what's in parantheses:
-                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
-
-                Explanation: (Give an explanation of the fact check)
-            
-            Again: Do NOT include what is in parantheses in the format.
-        `;
+// Function to display error when analyze button is pressed and conditions are met
+function displayError(message) {
+    const analyzeBoxContainer = document.querySelector('bubble-content');
+    let errorMessage = document.querySelector('.error-message');
+    if (!errorMessage) {
+        errorMessage = document.createElement('div');
+        errorMessage.classList.add('error-message');
+        errorMessage.style.color = 'red';
+        errorMessage.style.marginBottom = '10px';
+        errorMessage.style.textAlign = 'center';
+        errorMessage.style.fontSize = '1em';
+        errorMessage.style.fontWeight = '500';
+        analyzeBoxContainer.insertBefore(errorMessage, analyzeButton);
+    }
+    errorMessage.innerText = message;
 }
 
 // Function that formats response from model
