@@ -1,5 +1,10 @@
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
+        id: "define",
+        title: "Define",
+        contexts: ["selection"]
+    });
+    chrome.contextMenus.create({
         id: "factCheck",
         title: "Fact-Check",
         contexts: ["selection"]
@@ -24,8 +29,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         files: ["./sidebar/content.css"]
     });
 
+    // Define Button is pushed
+    if (info.menuItemId === "define" && info.selectionText) {
+        try {
+
+            // Send the message to display the fact-check bubble
+            chrome.tabs.sendMessage(tab.id, { action: "displayDefineBubble", selectedText: info.selectionText });
+
+        } catch (error) {
+            console.error("Error in context menu action:", error);
+        }
+    }
+
     // Fact Check Button is pushed
-    if (info.menuItemId === "factCheck" && info.selectionText) {
+    else if (info.menuItemId === "factCheck" && info.selectionText) {
         try {
 
             // Send the message to display the fact-check bubble

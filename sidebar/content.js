@@ -24,6 +24,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
             break;
+        case 'displayDefineBubble':
+            displayBubble(request.selectedText, 'defineBubble');
+            break;
         case 'displayFactCheckBubble':
             displayBubble(request.selectedText, 'factCheckBubble');
             break;
@@ -146,7 +149,7 @@ function createSidebarElement() {
     sidebar.innerHTML = `
         <button id="closeSidebarBtn">✖️</button>
         <h3>Summary</h3>
-        <p id="summary"></p>
+        <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
         <h3>Analysis</h3>
         <p id="analysis">Highlight text, right click, and "Analyze".</p>
     `;
@@ -363,14 +366,16 @@ async function displayBubble(selectedText, type) {
     bubble.addEventListener("dblclick", () => bubble.remove());
     makeBubbleDraggable(bubble);
 
-    // Error message if the summary is empty
-    if (summaryEl.innerText === "") {
-        displayErrorMessage(bubble);
-        return;
+    if (type !== "defineBubble") {
+        // Error message if the summary is empty
+        if (summaryEl.innerText === "") {
+            displayErrorMessage(bubble);
+            return;
+        }
+        else { bubble.style.color = '#ffffff'; }
     }
-    else { bubble.style.color = '#ffffff'; }
 
-    if (type === 'factCheckBubble') { await fillInFactCheckBubble(bubble, summary, selectedText); }
+    if (type === 'factCheckBubble' || type === 'defineBubble') { await fillInBubble(bubble, type, summary, selectedText); }
     else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble, summary, selectedText); }
 }
 
@@ -416,26 +421,48 @@ function displayErrorMessage(bubble) {
     `;
 }
 
-async function fillInFactCheckBubble(bubble, summary, selectedText) {
+async function fillInBubble(bubble, type, summary, selectedText) {
     // Placeholder text while loading fact check result
-    bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">Checking facts...</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
+    if (type === 'factCheckBubble') {
+        bubble.innerHTML = `
+        <div class="bubble-title">Fact Checker</div>
+        <div class="bubble-content">Checking facts...</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    }
 
+    // Placeholder text while loading definition result
+    else {
+        bubble.innerHTML = `
+        <div class="bubble-title">Define</div>
+        <div class="bubble-content">Fetching definition...</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    }
+    
     let result = '';
     try {
         const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
         if (available !== "no") {
-            const session = await ai.languageModel.create({
-                systemPrompt: getFactCheckPrompt(summary)
-            });
+            let session = null;
 
             // Fetch result - Further lines format the result properly
-            result = await session.prompt(`Analyze: "${selectedText}"`);
+            if (type === 'factCheckBubble') {
+                session = await ai.languageModel.create({
+                    systemPrompt: getFactCheckPrompt(summary)
+                });
+                result = await session.prompt(`Analyze: "${selectedText}"`);
+            }
+            else {
+                session = await ai.languageModel.create({
+                    systemPrompt: "Give the definition"
+                });
+                result = await session.prompt(`Define: "${selectedText}"`);
+            }
 
             result = formatTextResponse(result);
 
@@ -450,13 +477,24 @@ async function fillInFactCheckBubble(bubble, summary, selectedText) {
     }
 
     bubble.innerHTML = '';
-    bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">${result || "Error fetching result."}</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
+    if (type === 'factCheckBubble') {
+        bubble.innerHTML = `
+        <div class="bubble-title">Fact Checker</div>
+        <div class="bubble-content">${result || "Error fetching result."}</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    }
+    else {
+        bubble.innerHTML = `
+        <div class="bubble-title">Define</div>
+        <div class="bubble-content">${result || "Error fetching result."}</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    }
 }
 
 function getFactCheckPrompt(summary) {
@@ -494,7 +532,7 @@ function fillInAnalysisBubble(bubble, summary, selectedText) {
         const analysisText = document.getElementById('analysis');
         analysisText.innerHTML = '';
         const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
-        
+
         const filteredText = selectedText
             .split('\n')
             .filter(line => (line.match(/ /g) || []).length >= 8)
