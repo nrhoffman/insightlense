@@ -1,6 +1,10 @@
 console.log("Content script loaded");
 let modelInstance = null;
 let pageContent = null;
+let modelReady = false;
+let summarizationReady = true;
+let analysisReady = true;
+let initializationReady = true;
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -10,7 +14,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             initializeModel();
         case "showSidebar":
             createSidebar();
-            checkSummaryAndNotify();
             break;
         case 'summarizeContent':
             summarizeContent(request.focusInput);
@@ -24,6 +27,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'displayBubble':
             displayFactCheckBubble(request.selectedText);
             break;
+        case 'getStatuses':
+            sendResponse({
+                modelStatus: modelReady ? "yes" : "no",
+                summarizationStatus: summarizationReady ? "yes" : "no",
+                analysisStatus: analysisReady ? "yes" : "no",
+                initializationStatus: initializationReady ? "yes" : "no",
+                summaryGenStatus: checkSummary() ? "yes" : "no"
+            });
+            break;
     }
 });
 
@@ -31,6 +43,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function initializeModel() {
     try {
         if (!modelInstance) {
+            initializationReady = false;
             console.log("Initializing model...");
 
             // Request page content
@@ -51,7 +64,7 @@ async function initializeModel() {
                         if (!modelInstance) {
                             modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(curEl) });
                         } else {
-                            result = await modelInstance.prompt(getPrompt(curEl));
+                            result = await initializeModelSection(curEl);
                         }
                         curEl = line + '\n';
                     }
@@ -59,20 +72,47 @@ async function initializeModel() {
 
                 // Process any remaining content
                 if (curEl.trim().length > 0) {
-                    result = await modelInstance.prompt(getPrompt(curEl));
+                    result = await initializeModelSection(curEl);
                 }
             } else {
                 // Initialize the model directly with full content if within maxChar
                 modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(pageContent) });
             }
-
+            chrome.runtime.sendMessage({ action: "activateSendButton" });
+            chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+            modelReady = true;
+            initializationReady = true;
             console.log("Model Initialized...");
         } else { console.log("Using existing model..."); }
     } catch (error) {
         console.error("Error initializing model:", error);
     }
+}
 
-    chrome.runtime.sendMessage({ action: "activateSendButton" });
+// Helper function that initializes model with another section
+async function initializeModelSection(curEl, retries = 5, delay = 1000) {
+    let result = '';
+    let attempt = 0;
+
+    while (attempt < retries) {
+        try {
+            result = await modelInstance.prompt(getPrompt(curEl));
+            break;
+        } catch (error) {
+            console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
+            attempt++;
+            if (attempt < retries) {
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay)); // Exponential backoff
+                delay *= 2; // Increase delay for exponential backoff
+            } else {
+                console.log("Max retries reached. Returning empty result.");
+                result = "Init failed after multiple attempts.";
+            }
+        }
+    }
+
+    return result;
 }
 
 function getPrompt(pageContent) {
@@ -108,13 +148,14 @@ function createSidebarElement() {
 }
 
 // Function checks if summary exists and notify popup
-function checkSummaryAndNotify() {
+function checkSummary() {
     const summary = document.getElementById('summary');
-    if (summary.innerText !== "") { chrome.runtime.sendMessage({ action: "activateAnalyzeButton" }); }
+    return summary.innerText !== "";
 }
 
 // Function fills the sidebar with a summary
 async function summarizeContent(focusInput) {
+    summarizationReady = false;
     const summary = document.getElementById('summary');
     summary.innerHTML = '';
 
@@ -125,6 +166,8 @@ async function summarizeContent(focusInput) {
 
     summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
     chrome.runtime.sendMessage({ action: "activateAnalyzeButton" });
+    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    summarizationReady = true;
 }
 
 // Helper function to get or create a loading spinner
@@ -142,55 +185,55 @@ function getOrCreateLoadingSpinner(parent) {
 // Function that fetches the web page content
 async function getPageContent() {
     let mainContent = document.querySelectorAll('article, main, section, div');
-    const contentTemp =  Array.from(mainContent)
-                        .filter(element => {
-                            // Exclude elements with classes typically associated with non-main content
-                            const className = element.className.toLowerCase();
-                            if (className === '') {
-                                return false;
-                            }
-                            const isSidebarOrNav = className.includes('sidebar') || className.includes('widget') ||
-                                                className.includes('related') || className.includes('nav') ||
-                                                className.includes('footer') || className.includes('advert') ||
-                                                className.includes('recirc') || className.includes('ad');
-                            return !isSidebarOrNav
-                        });
+    const contentTemp = Array.from(mainContent)
+        .filter(element => {
+            // Exclude elements with classes typically associated with non-main content
+            const className = element.className.toLowerCase();
+            if (className === '') {
+                return false;
+            }
+            const isSidebarOrNav = className.includes('sidebar') || className.includes('widget') ||
+                className.includes('related') || className.includes('nav') ||
+                className.includes('footer') || className.includes('advert') ||
+                className.includes('recirc') || className.includes('ad');
+            return !isSidebarOrNav
+        });
 
-    const contentElements = contentTemp.flatMap(element => 
+    const contentElements = contentTemp.flatMap(element =>
         Array.from(element.querySelectorAll('p, a, h1, h2, h3, h4, h5, h6, li, blockquote, span, figcaption, em'))
-        .filter(childElement => {
-            // Check if the current element or its parent contains 'sidebar' or any other unwanted class
-            const currentElementClass = childElement.className.toLowerCase();
-            const parentElement = childElement.parentElement;
-            const parentClass = parentElement ? parentElement.className.toLowerCase() : '';
-            
-            const isCurrentElementSidebar = currentElementClass.includes('sidebar') || currentElementClass.includes('widget') ||
-                                           currentElementClass.includes('related') || currentElementClass.includes('nav') ||
-                                           currentElementClass.includes('footer') || currentElementClass.includes('advert') ||
-                                           currentElementClass.includes('toolbar') || currentElementClass.includes('aside') ||
-                                           currentElementClass.includes('ad') || currentElementClass.includes('comment') ||
-                                           currentElementClass.includes('card') || currentElementClass.includes('episode') ||
-                                           currentElementClass.includes('tag') || currentElementClass.includes('recommend');
-    
-            const isParentSidebar = parentClass.includes('sidebar') || parentClass.includes('widget') ||
-                                   parentClass.includes('related') || parentClass.includes('nav') ||
-                                   parentClass.includes('footer') || parentClass.includes('advert') ||
-                                   parentClass.includes('toolbar') || parentClass.includes('aside') ||
-                                   parentClass.includes('ad') || parentClass.includes('comment') ||
-                                   parentClass.includes('card') || parentClass.includes('episode') ||
-                                   parentClass.includes('tag') || parentClass.includes('recommend');
-    
-            return !isCurrentElementSidebar && !isParentSidebar; // Exclude if either the current element or its parent is a sidebar or similar
-    }));
+            .filter(childElement => {
+                // Check if the current element or its parent contains 'sidebar' or any other unwanted class
+                const currentElementClass = childElement.className.toLowerCase();
+                const parentElement = childElement.parentElement;
+                const parentClass = parentElement ? parentElement.className.toLowerCase() : '';
+
+                const isCurrentElementSidebar = currentElementClass.includes('sidebar') || currentElementClass.includes('widget') ||
+                    currentElementClass.includes('related') || currentElementClass.includes('nav') ||
+                    currentElementClass.includes('footer') || currentElementClass.includes('advert') ||
+                    currentElementClass.includes('toolbar') || currentElementClass.includes('aside') ||
+                    currentElementClass.includes('ad') || currentElementClass.includes('comment') ||
+                    currentElementClass.includes('card') || currentElementClass.includes('episode') ||
+                    currentElementClass.includes('tag') || currentElementClass.includes('recommend');
+
+                const isParentSidebar = parentClass.includes('sidebar') || parentClass.includes('widget') ||
+                    parentClass.includes('related') || parentClass.includes('nav') ||
+                    parentClass.includes('footer') || parentClass.includes('advert') ||
+                    parentClass.includes('toolbar') || parentClass.includes('aside') ||
+                    parentClass.includes('ad') || parentClass.includes('comment') ||
+                    parentClass.includes('card') || parentClass.includes('episode') ||
+                    parentClass.includes('tag') || parentClass.includes('recommend');
+
+                return !isCurrentElementSidebar && !isParentSidebar; // Exclude if either the current element or its parent is a sidebar or similar
+            }));
     console.log(contentElements)
-    const contentClean =  Array.from(contentElements)
-                        .map(element => {
-                            let cleanedText = element.innerText.trim(); // Remove leading/trailing space
-                            cleanedText = cleanedText.replace(/\s+/g, ' ').replace(/\n+/g, ' ');
-                            return cleanedText.length > 0 ? cleanedText : '';
-                        })
-                        .filter(text => text.length > 0)
-                        .filter(text => text.split(/\s+/).length >= 5);
+    const contentClean = Array.from(contentElements)
+        .map(element => {
+            let cleanedText = element.innerText.trim(); // Remove leading/trailing space
+            cleanedText = cleanedText.replace(/\s+/g, ' ').replace(/\n+/g, ' ');
+            return cleanedText.length > 0 ? cleanedText : '';
+        })
+        .filter(text => text.length > 0)
+        .filter(text => text.split(/\s+/).length >= 5);
     const uniqueContent = Array.from(new Set(contentClean)).join('\n');
     console.log(uniqueContent);
     return uniqueContent;
@@ -248,13 +291,13 @@ async function summarizeLargePageContent(separateLines, maxChar, focusInput) {
 }
 
 // Function that generates the summary
-async function getSummary(summarizer, prompt, retries = 5, delay = 1000){
+async function getSummary(summarizer, prompt, retries = 5, delay = 1000) {
     let summary = '';
     let attempt = 0;
 
     while (attempt < retries) {
         try {
-             summary = await summarizer.summarize(prompt);
+            summary = await summarizer.summarize(prompt);
             break;
         } catch (error) {
             console.log(`Error summarizing content on attempt ${attempt + 1}:`, error);
@@ -288,28 +331,41 @@ function getSummaryContext(focusInput) {
 
 // Function that populates the analysis portion of the sidebar
 async function analyzeContent(pageData) {
-    const htmlData = await analyzePageText(pageData);
-
-    const analysisContent = document.getElementById('analysis');
-    analysisContent.innerHTML = '';
-    analysisContent.innerHTML = `<span>${htmlData}</span>`;
-
-    chrome.runtime.sendMessage({ action: "turnOffLoadingCircle" });
-}
-
-// Function that populates the analysis portion of the sidebar
-async function analyzeContent(pageData) {
+    analysisReady = false;
     const analysisContent = document.getElementById('analysis');
     analysisContent.innerHTML = `<span>${await analyzePageText(pageData)}</span>`;
     chrome.runtime.sendMessage({ action: "turnOffLoadingCircle" });
+    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    analysisReady = true;
 }
 
 // Function that analyzes web page content
-async function analyzePageText(pageData) {
+async function analyzePageText(pageData, retries = 5, delay = 1000) {
+    let result = '';
     const summary = document.getElementById('summary').textContent;
+
     const session = await ai.languageModel.create({ systemPrompt: getAnalysisPrompt(summary) });
 
-    const result = await session.prompt(`Analyze: "${pageData}"`);
+    let attempt = 0;
+
+    while (attempt < retries) {
+        try {
+            result = await session.prompt(`Analyze: "${pageData}"`);
+            break;
+        } catch (error) {
+            console.log(`Error summarizing content on attempt ${attempt + 1}:`, error);
+            attempt++;
+            if (attempt < retries) {
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            } else {
+                console.log("Max retries reached. Returning empty analysis.");
+                result = "Analysis failed after multiple attempts.";
+            }
+        }
+    }
+
     session.destroy();
 
     return formatTextResponse(result);

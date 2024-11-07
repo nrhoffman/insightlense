@@ -1,21 +1,29 @@
+const summarizeButton = document.getElementById('summarizeButton');
+const sendButton = document.getElementById('sendButton');
+const analyzeButton = document.getElementById('analyzeButton');
+const chatWindow = document.getElementById('chatWindow');
+const outputElement = document.createElement('p');
+const loadingSpinner = document.getElementById('loadingSpinner');
+
 // Listener for messages from sidebar
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  const sendButton = document.getElementById('sendButton');
-  const chatWindow = document.getElementById('chatWindow');
-  const outputElement = document.createElement('p');
   outputElement.className = 'bot-p';
 
   switch (request.action) {
+
+    // Activates analysis button when summary generation is complete
+    case "activateSummaryButton":
+      summarizeButton.disabled = false;
+      break;
+
     // Turns off loading circle when analysis is complete
     case "turnOffLoadingCircle":
-      const loadingSpinner = document.getElementById('loadingSpinner');
       loadingSpinner.style.display = 'none';
       document.getElementById('loadingContainer').classList.remove('active');
       break;
 
     // Activates analysis button when summary generation is complete
     case "activateAnalyzeButton":
-      const analyzeButton = document.getElementById('analyzeButton');
       analyzeButton.disabled = false;
       analyzeButton.innerText = 'Analyze';
       break;
@@ -59,6 +67,9 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     files: ["./sidebar/sidebar.css"]
   });
 
+  // Send the message to show sidebar after script injection
+  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
+
   // Fetches selected content from web page
   const pageContent = await chrome.scripting.executeScript({
     target: { tabId: tabs[0].id },
@@ -78,11 +89,44 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     currentCharCount.innerText = `(Current Characters Selected: 0)`;
   }
 
-  // Send the message to initialize model
-  chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
+  // Send the message to check on statuses
+  const status = await chrome.tabs.sendMessage(tabId, { action: "getStatuses", tabId: tabId });
+  console.log(status);
 
-  // Send the message to show sidebar after script injection
-  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
+  // If Initialization isn't running, run it
+  if (status.initializationStatus === "yes") {
+
+    // Send the message to initialize model
+    chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
+  }
+
+  // If model is ready, activate chatbot
+  if (status.modelStatus === "yes") {
+    sendButton.disabled = false;
+    chatWindow.innerHTML = '';
+    outputElement.textContent = `Chatbot: I'm ready for any questions.`;
+
+    // Append the new output element to the chat window
+    chatWindow.appendChild(outputElement);
+  }
+
+  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
+  if (status.modelStatus === "yes" && status.summarizationStatus === "yes" && status.analysisStatus === "yes") {
+    summarizeButton.disabled = false;
+  }
+
+  // If analysis isn't running and there's a summay, active analysis button
+  if (status.analysisStatus === "yes" && status.summaryGenStatus == "yes") {
+    analyzeButton.disabled = false;
+    analyzeButton.innerText = 'Analyze';
+  }
+
+  // If analysis is going on turn on loading wheel
+  else if (status.analysisStatus === "no") {
+    loadingSpinner.style.display = 'inline-block';
+    document.getElementById('loadingContainer').classList.add('active');
+  }
+
 });
 
 // Summarize button is pressed
@@ -91,9 +135,9 @@ document.getElementById('summarizeButton').addEventListener('click', async () =>
     const userInput = document.getElementById('userInput');
 
     // Update Analyze Button State
-    const analyzeButton = document.getElementById('analyzeButton');
     analyzeButton.innerText = 'Analyze After Summary Generation';
     analyzeButton.disabled = true;
+    summarizeButton.disabled = true;
 
     console.log("Sending summarize message...");
     chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
@@ -102,7 +146,6 @@ document.getElementById('summarizeButton').addEventListener('click', async () =>
 
 // Analyze button is pressed
 document.getElementById('analyzeButton').addEventListener('click', async () => {
-  const loadingSpinner = document.getElementById('loadingSpinner');
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const pageContent = await chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
@@ -124,6 +167,8 @@ document.getElementById('analyzeButton').addEventListener('click', async () => {
 
     loadingSpinner.style.display = 'inline-block';
     document.getElementById('loadingContainer').classList.add('active');
+    analyzeButton.disabled = true;
+    summarizeButton.disabled = true;
     sendToSidebar(filteredText);
   });
 });
