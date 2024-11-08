@@ -9,6 +9,19 @@ export async function createSidebar() {
     });
 }
 
+
+// Helper function to get or create a loading spinner
+export function getOrCreateLoadingSpinner(parent) {
+    let loadingSpinner = document.getElementById('loadingSpinner');
+    if (!loadingSpinner) {
+        loadingSpinner = document.createElement('div');
+        loadingSpinner.id = 'loadingSpinner';
+        loadingSpinner.classList.add('spinner');
+        parent.parentElement.insertBefore(loadingSpinner, parent);
+    }
+    return loadingSpinner;
+}
+
 // Helper function to create sidebar element
 function createSidebarElement() {
     const sidebar = document.createElement('div');
