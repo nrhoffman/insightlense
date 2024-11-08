@@ -26,7 +26,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Inject the CSS
     await chrome.scripting.insertCSS({
         target: { tabId: tab.id },
-        files: ["./content/content.css"]
+        files: ["./content/bubbles/bubbles.css"]
     });
 
     // Define Button is pushed

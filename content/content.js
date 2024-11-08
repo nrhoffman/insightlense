@@ -1,8 +1,11 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
+import { define } from './utilities/define.js';
+import { factCheck } from './utilities/faceCheck.js';
 import { generateAnalysis } from './utilities/analyze.js';
 import { generateSummary } from './utilities/summarize.js';
 import { getPageContent } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
+import { populateBubble, bubbleDragging } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
 let modelInstance = null;
@@ -109,233 +112,59 @@ async function analyzeContent(pageData) {
     analysisReady = true;
 }
 
-// Function checks if summary exists and notify popup
-function checkSummary() {
-    const summary = document.getElementById('summary');
-    return summary.innerText !== "";
-}
-
-// Function that gets output from chat bot
-async function getChatBotOutput(input) {
-    if(modelInstance){
-        const result = await modelInstance.prompt(input);
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
-    }
-    else{
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: "Error... Model crashed..." });
-    }
-}
-
-// Function that displays fact check bubble
-async function displayBubble(selectedText, type) {
-    let bubble = document.querySelector(`.${type}`);
-    if (!bubble) {
-        bubble = document.createElement("div");
-        bubble.id = `${type}`;
-        bubble.classList.add(`${type}`);
-        document.body.appendChild(bubble);
-    }
-
-    // Get selection position to place bubble
-    const selection = window.getSelection();
-    const range = selection.getRangeAt(0).getBoundingClientRect();
-    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
-    bubble.style.left = `${window.scrollX + range.left}px`;
-
-    const summaryEl = document.getElementById('summary');
-    const summary = summaryEl.textContent;
-
-    // Close bubble on click
-    bubble.addEventListener("dblclick", () => bubble.remove());
-    makeBubbleDraggable(bubble);
-
-    if (type !== "defineBubble") {
-        // Error message if the summary is empty
-        if (summaryEl.innerText === "") {
-            displayErrorMessage(bubble);
-            return;
-        }
-        else { bubble.style.color = '#ffffff'; }
-    }
-
-    if (type === 'factCheckBubble' || type === 'defineBubble') { await fillInBubble(bubble, type, summary, selectedText); }
-    else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble, summary, selectedText); }
-}
-
-// Function to make the bubble draggable
-function makeBubbleDraggable(bubble) {
-    let offsetX, offsetY;
-    let isDragging = false;
-
-    bubble.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        isDragging = true;
-
-        // Calculate the offset
-        offsetX = e.clientX - bubble.getBoundingClientRect().left;
-        offsetY = e.clientY - bubble.getBoundingClientRect().top;
-
-        const onMouseMove = (e) => {
-            if (isDragging) {
-                // Update bubble's position based on mouse movement
-                bubble.style.left = `${e.pageX - offsetX}px`;
-                bubble.style.top = `${e.pageY - offsetY}px`;
-            }
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener("mousemove", onMouseMove);
-            document.removeEventListener("mouseup", onMouseUp);
-            isDragging = false;
-        };
-
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
-    });
-}
-
-function displayErrorMessage(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Error</div>
-    <div class="bubble-content">Wait until summary generation completes.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-}
-
-async function fillInBubble(bubble, type, summary, selectedText) {
-    // Placeholder text while loading fact check result
-    if (type === 'factCheckBubble') {
-        bubble.innerHTML = `
-        <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">Checking facts...</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-
-    // Placeholder text while loading definition result
-    else {
-        bubble.innerHTML = `
-        <div class="bubble-title">Define</div>
-        <div class="bubble-content">Fetching definition...</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-    
+// Function that displays bubbles
+async function displayBubble(selectedText, type){
     let result = '';
-    try {
-        const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-        if (available !== "no") {
-            let session = null;
 
-            // Fetch result - Further lines format the result properly
-            if (type === 'factCheckBubble') {
-                session = await ai.languageModel.create({
-                    systemPrompt: getFactCheckPrompt(summary)
-                });
-                result = await session.prompt(`Analyze: "${selectedText}"`);
-            }
-            else {
-                session = await ai.languageModel.create({
-                    systemPrompt: "Give the definition"
-                });
-                result = await session.prompt(`Define: "${selectedText}"`);
-            }
+    await populateBubble(type);
 
-            result = formatTextResponse(result);
-
-            session.destroy();
-        }
-    } catch (error) {
-        if (error.message === "Other generic failures occurred.") {
-            result = `Other generic failures occurred. Retrying...`;
-        }
-        else { result = error.message; }
-        console.error("Error generating content:", error);
-    }
-
-    bubble.innerHTML = '';
-    if (type === 'factCheckBubble') {
-        bubble.innerHTML = `
+    if (type === "factCheckBubble"){
+        const factCheckBubble = document.getElementById(type);
+        result = await factCheck(selectedText);
+        factCheckBubble.innerHTML = '';
+        factCheckBubble.innerHTML = `
         <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">${result || "Error fetching result."}</div>
+        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
         <footer class="bubble-footer">
             <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
         </footer>
         `;
     }
-    else {
-        bubble.innerHTML = `
+    else if (type === "defineBubble"){
+        const defineBubble = document.getElementById(type);
+        result = await define(selectedText);
+        defineBubble.innerHTML = '';
+        defineBubble.innerHTML = `
         <div class="bubble-title">Define</div>
-        <div class="bubble-content">${result || "Error fetching result."}</div>
+        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
         <footer class="bubble-footer">
             <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
         </footer>
         `;
     }
-}
+    else if (type === "analysisBubble"){
+        const analyzeBubble = document.getElementById(type);
 
-function getFactCheckPrompt(summary) {
-    return `You will be given text to fact-check with the given context: ${summary}
-
-            Only use English.
-            Ignore text you're not trained on.
-            Don't output language you're not trained on.
-            Bold Titles.
-            Fact check the text and output in this exact format without including what's in parantheses:
-                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
-
-                Explanation: (Give an explanation of the fact check)
-            
-            Again: Do NOT include what is in parantheses in the format.
-        `;
-}
-
-function fillInAnalysisBubble(bubble, summary, selectedText) {
-    bubble.innerHTML = '';
-    bubble.innerHTML = `
-    <div class="bubble-title">Analyze</div>
-    <div class="bubble-content">
-        <div id="bubbleText">Max Character Count: 4000</div>
-        <div id="currentCharCount">Current Characters Selected: 0</div>
-        <button id="analyzeButton">Analyze</button>
-    </div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-
-    const analyzeButton = bubble.querySelector('#analyzeButton');
-
-    const analyzeButtonClickHandler = async () => {
-        analyzeButton.removeEventListener('click', analyzeButtonClickHandler);
-    
-        const filteredText = selectedText
+        // Listener removes after analysis button pressed
+        document.getElementById('analyzeButton').addEventListener('click', async () => {
+            const filteredText = selectedText
             .split('\n')
             .filter(line => (line.match(/ /g) || []).length >= 8)
             .join('\n');
     
-        if (filteredText.length === 0 || filteredText.length > 4000) {
-            const errorText = filteredText.length === 0
-                ? "Text must be highlighted."
-                : "Selected characters must be under 4000.";
-            displayError(errorText);
-            return;
-        }
-    
-        bubble.remove();
-        await analyzeContent(filteredText);
+            if (filteredText.length === 0 || filteredText.length > 4000) {
+                const errorText = filteredText.length === 0
+                    ? "Text must be highlighted."
+                    : "Selected characters must be under 4000.";
+                displayError(errorText);
+                return;
+            }
+            analyzeBubble.remove();
 
+            // Analysis Starts
+            await analyzeContent(filteredText);
+        }, { once: true })
     }
-
-    // Analyze button is pressed
-    analyzeButton.addEventListener('click', analyzeButtonClickHandler);
 }
 
 // Function to update the character count
@@ -394,4 +223,21 @@ function formatTextResponse(response) {
     htmlData = htmlData.replace(/\n/g, "<br>");
 
     return htmlData;
+}
+
+// Function checks if summary exists and notify popup
+function checkSummary() {
+    const summary = document.getElementById('summary');
+    return summary.innerText !== "";
+}
+
+// Function that gets output from chat bot
+async function getChatBotOutput(input) {
+    if(modelInstance){
+        const result = await modelInstance.prompt(input);
+        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
+    }
+    else{
+        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: "Error... Model crashed..." });
+    }
 }
