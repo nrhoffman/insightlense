@@ -62,7 +62,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   console.log(status);
 
   // If Initialization isn't running, run it
-  if (status.initializationStatus === "yes") {
+  if (status.initializationStatus === "no") {
 
     // Send the message to initialize model
     chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
