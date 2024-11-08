@@ -37,7 +37,7 @@ export async function initializeModel(modelInstance, pageContent) {
                     } else {
 
                          // Process the current chunk
-                        result = await initializeModelSection(modelInstance, curEl);
+                        modelInstance = await initializeModelSection(modelInstance, curEl);
                     }
 
                     // Start a new chunk with the current line
@@ -47,7 +47,7 @@ export async function initializeModel(modelInstance, pageContent) {
 
             // Process any remaining content in the last chunk
             if (curEl.trim().length > 0) {
-                result = await initializeModelSection(modelInstance, curEl);
+                modelInstance = await initializeModelSection(modelInstance, curEl);
             }
         } else {
 
@@ -97,12 +97,11 @@ async function initializeModelSection(modelInstance, curEl, retries = 10, delay 
 
                 // If the maximum number of retries is reached, return a failure message
                 console.log("Max retries reached. Returning empty result.");
-                result = "Init failed after multiple attempts.";
             }
         }
     }
 
-    return result;
+    return modelInstance;
 }
 
 /**
