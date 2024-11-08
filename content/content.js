@@ -59,6 +59,8 @@ window.addEventListener('beforeunload', () => {
         modelInstance.destroy();
         console.log("Chat Bot Model Destroyed");
     }
+    document.removeEventListener("mouseup", updateCharacterCount);
+    document.removeEventListener("keyup", updateCharacterCount);
 });
 
 async function initModel(){
@@ -295,17 +297,19 @@ function fillInAnalysisBubble(bubble, summary, selectedText) {
     </footer>
     `;
 
-    // Analyze button is pressed
-    bubble.querySelector('#analyzeButton').addEventListener('click', async () => {
+    const analyzeButton = bubble.querySelector('#analyzeButton');
+
+    const analyzeButtonClickHandler = async () => {
         const analysisText = document.getElementById('analysis');
         analysisText.innerHTML = '';
         const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
-
+        analyzeButton.removeEventListener('click', analyzeButtonClickHandler);
+    
         const filteredText = selectedText
             .split('\n')
             .filter(line => (line.match(/ /g) || []).length >= 8)
             .join('\n');
-
+    
         if (filteredText.length === 0 || filteredText.length > 4000) {
             const errorText = filteredText.length === 0
                 ? "Text must be highlighted."
@@ -313,11 +317,14 @@ function fillInAnalysisBubble(bubble, summary, selectedText) {
             displayError(errorText);
             return;
         }
-
+    
         bubble.remove();
         await analyzeContent(filteredText);
         loadingSpinner.remove();
-    });
+    }
+
+    // Analyze button is pressed
+    analyzeButton.addEventListener('click', analyzeButtonClickHandler);
 }
 
 // Function that populates the analysis portion of the sidebar
