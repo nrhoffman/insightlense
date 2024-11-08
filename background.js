@@ -20,7 +20,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Inject the content script
     await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["./content/content.js"]
+        files: ["./dist/content.bundle.js"]
     });
 
     // Inject the CSS

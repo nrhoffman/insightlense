@@ -1,3 +1,5 @@
+import { createSidebar } from './sidebar/sidebar.js';
+
 console.log("Content script loaded");
 let modelInstance = null;
 let pageContent = null;
@@ -129,32 +131,6 @@ function getPrompt(pageContent) {
     return `You are a chatbot that will answer questions about content given.
             Keep responses short.
             Remember enough to answer questions later: ${pageContent}`;
-}
-
-// Function that creates or shows the sidebar
-async function createSidebar() {
-    let sidebar = document.getElementById('insightSidebar') || createSidebarElement();
-    sidebar.style.display = 'block'; // Show the sidebar
-
-    // Event listener for close button
-    document.getElementById('closeSidebarBtn').addEventListener('click', () => {
-        sidebar.style.display = 'none';
-    });
-}
-
-// Helper function to create sidebar element
-function createSidebarElement() {
-    const sidebar = document.createElement('div');
-    sidebar.id = 'insightSidebar';
-    sidebar.innerHTML = `
-        <button id="closeSidebarBtn">✖️</button>
-        <h3>Summary</h3>
-        <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
-        <h3>Analysis</h3>
-        <p id="analysis">Highlight text, right click, and "Analyze".</p>
-    `;
-    document.body.appendChild(sidebar);
-    return sidebar;
 }
 
 // Function checks if summary exists and notify popup

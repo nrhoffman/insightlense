@@ -46,12 +46,12 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   // Inject script and CSS once when popup opens
   await chrome.scripting.executeScript({
     target: { tabId: tabId },
-    files: ["./content/content.js"]
+    files: ["./dist/content.bundle.js"]
   });
 
   await chrome.scripting.insertCSS({
     target: { tabId: tabId },
-    files: ["./content/sidebar.css"]
+    files: ["./content/sidebar/sidebar.css"]
   });
 
   // Send the message to show sidebar after script injection

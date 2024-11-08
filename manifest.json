@@ -34,8 +34,9 @@
         "<all_urls>"
       ],
       "js": [
-        "./content/content.js"
+        "./dist/content.bundle.js"
       ],
+      "type": "module",
       "css": [
         "./content/content.css"
       ],
