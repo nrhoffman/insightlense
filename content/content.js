@@ -1,4 +1,5 @@
 import { createSidebar } from './sidebar/sidebar.js';
+import { initializeModel } from './utilities/initializeModel.js';
 
 console.log("Content script loaded");
 let modelInstance = null;
@@ -13,7 +14,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     switch (request.action) {
         case "initializeModel":
-            initializeModel();
+            initModel();
+            break;
         case "showSidebar":
             createSidebar();
             break;
@@ -47,91 +49,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
+async function initModel(){
+    initializationReady = false;
+
+    // Request page content
+    pageContent = await getPageContent();
+
+    // Initialize Chat Bot model
+    modelInstance = await initializeModel(modelInstance, pageContent);
+    modelReady = true;
+    initializationReady = true;
+}
+
 // Event listeners for updating the character count
 document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
-
-// Function to initialize the model
-async function initializeModel() {
-    try {
-        if (!modelInstance) {
-            initializationReady = false;
-            console.log("Initializing model...");
-
-            // Request page content
-            pageContent = await getPageContent();
-
-            const maxChar = 3800;
-            let result = null;
-
-            // If page content exceeds maxChar, process it in chunks
-            if (pageContent.length > maxChar) {
-                let curEl = '';
-                const separateLines = pageContent.split(/\r?\n|\r|\n/g).filter(line => line.split(" ").length - 1 >= 3);
-
-                for (const line of separateLines) {
-                    if ((curEl + line).length < maxChar) {
-                        curEl += line + '\n';
-                    } else {
-                        if (!modelInstance) {
-                            modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(curEl) });
-                        } else {
-                            result = await initializeModelSection(curEl);
-                        }
-                        curEl = line + '\n';
-                    }
-                }
-
-                // Process any remaining content
-                if (curEl.trim().length > 0) {
-                    result = await initializeModelSection(curEl);
-                }
-            } else {
-                // Initialize the model directly with full content if within maxChar
-                modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(pageContent) });
-            }
-            chrome.runtime.sendMessage({ action: "activateSendButton" });
-            chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-            modelReady = true;
-            initializationReady = true;
-            console.log("Model Initialized...");
-        } else { console.log("Using existing model..."); }
-    } catch (error) {
-        console.error("Error initializing model:", error);
-    }
-}
-
-// Helper function that initializes model with another section
-async function initializeModelSection(curEl, retries = 5, delay = 1000) {
-    let result = '';
-    let attempt = 0;
-
-    while (attempt < retries) {
-        try {
-            result = await modelInstance.prompt(getPrompt(curEl));
-            break;
-        } catch (error) {
-            console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
-            attempt++;
-            if (attempt < retries) {
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay)); // Exponential backoff
-                delay *= 2; // Increase delay for exponential backoff
-            } else {
-                console.log("Max retries reached. Returning empty result.");
-                result = "Init failed after multiple attempts.";
-            }
-        }
-    }
-
-    return result;
-}
-
-function getPrompt(pageContent) {
-    return `You are a chatbot that will answer questions about content given.
-            Keep responses short.
-            Remember enough to answer questions later: ${pageContent}`;
-}
 
 // Function checks if summary exists and notify popup
 function checkSummary() {
