@@ -115,7 +115,7 @@ function checkSummary() {
     return summary.innerText !== "";
 }
 
-// Function that gets
+// Function that gets output from chat bot
 async function getChatBotOutput(input) {
     if(modelInstance){
         const result = await modelInstance.prompt(input);
