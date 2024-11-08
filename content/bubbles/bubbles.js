@@ -18,7 +18,7 @@ export async function populateBubble(type) {
     const summary = summaryEl.textContent;
 
     // Close bubble on click
-    bubble.addEventListener("dblclick", () => bubble.remove());
+    bubble.addEventListener("dblclick", () => bubble.remove(), { once: true });
     makeBubbleDraggable(bubble);
 
     if (type !== "defineBubble") {

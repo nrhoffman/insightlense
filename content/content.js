@@ -145,25 +145,29 @@ async function displayBubble(selectedText, type){
     else if (type === "analysisBubble"){
         const analyzeBubble = document.getElementById(type);
 
-        // Listener removes after analysis button pressed
-        document.getElementById('analyzeButton').addEventListener('click', async () => {
-            const filteredText = selectedText
-            .split('\n')
-            .filter(line => (line.match(/ /g) || []).length >= 8)
-            .join('\n');
-    
-            if (filteredText.length === 0 || filteredText.length > 4000) {
-                const errorText = filteredText.length === 0
-                    ? "Text must be highlighted."
-                    : "Selected characters must be under 4000.";
-                displayError(errorText);
-                return;
-            }
-            analyzeBubble.remove();
+        if (!analyzeButton._listenerAdded) {
+            // Listener removes after analysis button pressed
+            document.getElementById('analyzeButton').addEventListener('click', async () => {
+                const filteredText = selectedText
+                .split('\n')
+                .filter(line => (line.match(/ /g) || []).length >= 8)
+                .join('\n');
+        
+                if (filteredText.length === 0 || filteredText.length > 4000) {
+                    const errorText = filteredText.length === 0
+                        ? "Text must be highlighted."
+                        : "Selected characters must be under 4000.";
+                    displayError(errorText);
+                    return;
+                }
+                analyzeBubble.remove();
 
-            // Analysis Starts
-            await analyzeContent(filteredText);
-        }, { once: true })
+                // Analysis Starts
+                await analyzeContent(filteredText);
+            }, { once: true })
+
+            analyzeButton._listenerAdded = true;
+        }
     }
 }
 
