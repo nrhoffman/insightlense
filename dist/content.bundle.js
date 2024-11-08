@@ -417,6 +417,14 @@ function _initModel() {
 document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
 
+// Listen for the page unload event to cleanup the model
+window.addEventListener('beforeunload', function () {
+  if (modelInstance) {
+    modelInstance.destroy();
+    console.log("Chat Bot Model Destroyed");
+  }
+});
+
 // Function checks if summary exists and notify popup
 function checkSummary() {
   var summary = document.getElementById('summary');
