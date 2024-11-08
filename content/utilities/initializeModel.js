@@ -113,6 +113,6 @@ async function initializeModelSection(modelInstance, curEl, retries = 10, delay 
  */
 function getPrompt(pageContent) {
     return `You are a chatbot that will answer questions about content given.
-            Keep responses short.
+            Keep responses short and only respond in english and trained formats/language.
             Remember enough to answer questions later: ${pageContent}`;
 }

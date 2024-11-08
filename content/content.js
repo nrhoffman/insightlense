@@ -56,7 +56,7 @@ document.addEventListener("keyup", updateCharacterCount);
 
 // Listen for the page unload event to cleanup the model
 window.addEventListener('beforeunload', () => {
-    if(modelInstance){
+    if (modelInstance) {
         modelInstance.destroy();
         console.log("Chat Bot Model Destroyed");
     }
@@ -64,7 +64,7 @@ window.addEventListener('beforeunload', () => {
     document.removeEventListener("keyup", updateCharacterCount);
 });
 
-async function initModel(){
+async function initModel() {
     initializationReady = true;
 
     // Request page content
@@ -113,12 +113,12 @@ async function analyzeContent(pageData) {
 }
 
 // Function that displays bubbles
-async function displayBubble(selectedText, type){
+async function displayBubble(selectedText, type) {
     let result = '';
 
     await populateBubble(type);
 
-    if (type === "factCheckBubble"){
+    if (type === "factCheckBubble") {
         const factCheckBubble = document.getElementById(type);
         result = await factCheck(selectedText);
         factCheckBubble.innerHTML = '';
@@ -130,7 +130,7 @@ async function displayBubble(selectedText, type){
         </footer>
         `;
     }
-    else if (type === "defineBubble"){
+    else if (type === "defineBubble") {
         const defineBubble = document.getElementById(type);
         result = await define(selectedText);
         defineBubble.innerHTML = '';
@@ -142,17 +142,17 @@ async function displayBubble(selectedText, type){
         </footer>
         `;
     }
-    else if (type === "analysisBubble"){
+    else if (type === "analysisBubble") {
         const analyzeBubble = document.getElementById(type);
 
         if (!analyzeButton._listenerAdded) {
             // Listener removes after analysis button pressed
             document.getElementById('analyzeButton').addEventListener('click', async () => {
                 const filteredText = selectedText
-                .split('\n')
-                .filter(line => (line.match(/ /g) || []).length >= 8)
-                .join('\n');
-        
+                    .split('\n')
+                    .filter(line => (line.match(/ /g) || []).length >= 8)
+                    .join('\n');
+
                 if (filteredText.length === 0 || filteredText.length > 4000) {
                     const errorText = filteredText.length === 0
                         ? "Text must be highlighted."
@@ -236,12 +236,35 @@ function checkSummary() {
 }
 
 // Function that gets output from chat bot
-async function getChatBotOutput(input) {
-    if(modelInstance){
-        const result = await modelInstance.prompt(input);
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
-    }
-    else{
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: "Error... Model crashed..." });
+async function getChatBotOutput(input, retries = 10, delay = 1000) {
+    let result = '';
+    let attempt = 0;
+
+    if (modelInstance) {
+
+        // Retry logic: Try initializing the model up to the specified number of retries
+        while (attempt < retries) {
+            try {
+
+                // Attempt to initialize the model with the current chunk of content
+                result = await modelInstance.prompt(input);
+                chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
+                break;
+            } catch (error) {
+                console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
+                attempt++;
+                if (attempt < retries) {
+
+                    // If retries are left, wait for a certain time before trying again
+                    console.log(`Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                } else {
+
+                    // If the maximum number of retries is reached, return a failure message
+                    console.log("Max retries reached. Returning empty result.");
+                }
+            }
+        }
     }
 }
