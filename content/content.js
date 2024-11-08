@@ -56,6 +56,8 @@ async function initModel(){
 
     // Initialize Chat Bot model
     modelInstance = await initializeModel(modelInstance, pageContent);
+    chrome.runtime.sendMessage({ action: "activateSendButton" });
+    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     modelReady = true;
 }
 

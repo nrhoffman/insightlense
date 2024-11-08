@@ -31,7 +31,7 @@ function createSidebarElement() {
         <h3>Summary</h3>
         <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
         <h3>Analysis</h3>
-        <p id="analysis">Highlight text, right click, and "Analyze".</p>
+        <p id="analysis">Highlight text, right click, and "Analyze". First generating summary can sometimes be beneficial.</p>
     `;
     document.body.appendChild(sidebar);
     return sidebar;
