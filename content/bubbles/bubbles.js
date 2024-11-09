@@ -53,7 +53,7 @@ export async function populateBubble(type) {
  * @param {number} offsetY - Vertical offset for dragging.
  * @param {boolean} isDragging - Flag indicating if the bubble is currently being dragged.
  */
-export function bubbleDragging(e, bubble, offsetX, offsetY, isDragging) {
+function bubbleDragging(e, bubble, offsetX, offsetY, isDragging) {
     e.preventDefault();
     isDragging = true;
 

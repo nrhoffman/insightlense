@@ -5,7 +5,7 @@ import { generateAnalysis } from './utilities/analyze.js';
 import { generateSummary } from './utilities/summarize.js';
 import { getPageContent } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
-import { populateBubble, bubbleDragging } from './bubbles/bubbles.js';
+import { populateBubble } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
 let modelInstance = null;
@@ -89,14 +89,25 @@ async function summarizeContent(focusInput) {
     summary.innerHTML = '';
     const loadingSpinner = getOrCreateLoadingSpinner(summary);
 
+    // Function to update the summary content
+    const updateSummaryContent = (content) => {
+        summary.innerHTML = `<span>${content.replace(/[\*-]/g, '')}</span>`;
+    };
+
+    // Define the error callback to use the update function
+    const onSummaryErrorUpdate = (errorMessage) => {
+        updateSummaryContent(errorMessage);
+    };
+
     // Request page content
     const pageContent = await getPageContent();
 
     // Generate Summary
-    const combinedSummary = await generateSummary(pageContent, focusInput);
+    const combinedSummary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
+
+    updateSummaryContent(combinedSummary);
 
     loadingSpinner.remove();
-    summary.innerHTML = `<span>${combinedSummary.replace(/\*/g, '')}</span>`;
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     summarizationReady = true;
 }
@@ -113,7 +124,7 @@ async function analyzeContent(pageData) {
 
     // Function to update the bubble content
     const updateAnalysisContent = (content) => {
-        analysisText.innerHTML = `<span>${formatTextResponse(analysis)}</span>`;
+        analysisText.innerHTML = `<span>${formatTextResponse(content)}</span>`;
     };
 
     // Define the error callback to use the update function
