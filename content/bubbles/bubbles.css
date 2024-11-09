@@ -19,12 +19,13 @@
 .bubble-title {
     font-weight: bold;
     font-size: 16px;
-    border-bottom: 2px solid #4caf50;
+    border-bottom: 2px solid #205e22
 }
 
 .bubble-content {
     font-size: 14px;
     margin-top: 10px;
+    align-content: center;
 }
 
 #defineCheckBubble:hover,
@@ -49,7 +50,7 @@
     padding: 10px;
     border: none;
     border-radius: 5px;
-    background-color: #4caf50;
+    background-color: #205e22;
     color: white;
     font-weight: bold;
     cursor: pointer;
@@ -59,11 +60,11 @@
   }
 
 #analyzeButton:hover {
-  background-color: #45a049;
+  background-color: #205e10;
   transform: scale(1.02);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 #analyzeButton:focus{
-  outline: 2px solid #4caf50;
+  outline: 2px solid #205e22;
 }

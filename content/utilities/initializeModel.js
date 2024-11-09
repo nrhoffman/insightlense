@@ -69,11 +69,11 @@ export async function initializeModel(modelInstance, pageContent) {
  *
  * @param {Object} modelInstance - The existing model instance to be used for initialization.
  * @param {string} curEl - The current section of content to initialize the model with.
- * @param {number} [retries=10] - The number of retry attempts in case of failure (default is 10).
+ * @param {number} [retries=6] - The number of retry attempts in case of failure (default is 6).
  * @param {number} [delay=1000] - The initial delay between retries in milliseconds (default is 1000).
  * @returns {string} The result of the initialization attempt, or an error message if all retries fail.
  */
-async function initializeModelSection(modelInstance, curEl, retries = 10, delay = 1000) {
+async function initializeModelSection(modelInstance, curEl, retries = 6, delay = 1000) {
     let result = '';
     let attempt = 0;
 
