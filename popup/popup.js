@@ -2,6 +2,7 @@ let listenersInitialized = false;  // Flag to check if listeners are initialized
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
+const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
 const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
 const outputElement = document.createElement('p');
@@ -57,7 +58,7 @@ function initializeListeners() {
 
     // Attach button listeners for summarize and send buttons
     summarizeButton.addEventListener('click', summarizeContent);
-    rewriteButton.addEventListener('click', summarizeContent);
+    rewriteButton.addEventListener('click', rewriteContent);
     sendButton.addEventListener('click', sendChatMessage);
   }
 }
@@ -70,7 +71,7 @@ function removeListeners() {
   if (listenersInitialized) {
     chrome.runtime.onMessage.removeListener(onMessageListener);
     summarizeButton.removeEventListener('click', summarizeContent);
-    rewriteButton.removeEventListener('click', summarizeContent);
+    rewriteButton.removeEventListener('click', rewriteContent);
     sendButton.removeEventListener('click', sendChatMessage);
     listenersInitialized = false;
   }
@@ -82,6 +83,16 @@ chrome.windows.onRemoved.addListener(removeListeners);
 // Run when popup is opened
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   const tabId = tabs[0].id;
+
+  
+  // Ensure only one checkbox is selected at a time
+  checkboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        checkboxes.forEach(cb => {
+            if (cb !== this) cb.checked = false;
+        });
+    });
+  });
 
   // Inject script and CSS once when popup opens
   await chrome.scripting.executeScript({
@@ -138,6 +149,24 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
  * while the summarization is in progress.
  */
 async function summarizeContent() {
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    const userInput = document.getElementById('userInput');
+
+    // Update Summarize Button State
+    summarizeButton.disabled = true;
+    rewriteButton.disabled = true;
+
+    console.log("Sending summarize message...");
+    chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
+  });
+}
+
+/**
+ * Handles the click event for the rewrite button. Sends a message to the content
+ * script to start rewriting content. Updates the button state to disabled
+ * while the rewrite is in progress.
+ */
+async function rewriteContent() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const userInput = document.getElementById('userInput');
 

@@ -25,9 +25,29 @@
             </div>
         </div>
 
-        <!-- Analyze Box -->
+        <!-- Rewrite Box -->
         <div class="box-container">
-            <div id="sidebarText">Rewrite Article</div>
+            <div id="sidebarText">Rewrite Content</div>
+            
+            <!-- Reading Level Checkboxes -->
+            <div id="reading-level" class="reading-level">
+                <div class="checkbox-text">Reading Level:</div>
+                <div class="checkbox-container">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="childrenLevel" name="readingLevel" value="children">
+                        <span class="checkbox-label">Children</span>
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="collegeLevel" name="readingLevel" value="college">
+                        <span class="checkbox-label">College</span>
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="currentLevel" name="readingLevel" value="current" checked>
+                        <span class="checkbox-label">Current</span>
+                    </label>
+                </div>
+            </div>
+
             <button id="rewriteButton" disabled>Rewrite After Summary Generation</button>
             
             <!-- Loading Spinner Container -->
