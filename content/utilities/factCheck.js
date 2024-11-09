@@ -1,6 +1,7 @@
 /**
- * Analyzes the provided page content by interacting with a language model session.
- * Implements a retry mechanism to handle transient errors during the analysis process.
+ * Fact-checks the provided text using a language model. It initializes a session,
+ * applies a context-specific prompt for fact-checking, and returns the result.
+ * If the model is unavailable or an error occurs, it handles retries and logs the error.
  *
  * @param {string} selectedText - The text to be defined by the language model.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
@@ -8,7 +9,7 @@
  * @param {number} delay - Initial delay between retries in milliseconds (default is 1000).
  * @returns {Promise<string>} - The definition of the selected text or an error message if the operation fails.
  */
-export async function generateAnalysis(selectedText, onErrorUpdate, retries = 10, delay = 1000) {
+export async function factCheck(selectedText, onErrorUpdate, retries = 10, delay = 1000) {
     let result = '';
     let attempt = 0;
     let session = null;
@@ -27,12 +28,12 @@ export async function generateAnalysis(selectedText, onErrorUpdate, retries = 10
                 // Create model
                 if(!session){
                     session = await ai.languageModel.create({
-                        systemPrompt: getAnalysisPrompt(summary) 
+                        systemPrompt: getFactCheckPrompt(summary)
                     });
                 }
 
                 // Prompt the model
-                result = await session.prompt(`Analyze: "${selectedText}"`);
+                result = await session.prompt(`Fact Check: "${selectedText}"`);
                 session.destroy();
                 break;
             }
@@ -46,7 +47,7 @@ export async function generateAnalysis(selectedText, onErrorUpdate, retries = 10
                 onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}\n`);
             }
 
-            console.log(`Error analyzing content on attempt ${attempt + 1}:`, error);
+            console.log(`Error fact checking content on attempt ${attempt + 1}:`, error);
             attempt++;
             if (attempt < retries) {
 
@@ -61,8 +62,8 @@ export async function generateAnalysis(selectedText, onErrorUpdate, retries = 10
                 if (session) session.destroy();
     
                 // If the maximum number of retries is reached, return a failure message
-                console.log("Max retries reached. Returning empty analysis.");
-                result = "Analysis failed after multiple attempts.";
+                console.log("Max retries reached. Returning empty fact check.");
+                result = "Fact check failed after multiple attempts.";
             }
         }
     }
@@ -71,36 +72,23 @@ export async function generateAnalysis(selectedText, onErrorUpdate, retries = 10
 }
 
 /**
- * Generates a prompt for the analysis model based on the provided summary.
- * The prompt is structured to guide the model in producing an analysis with specific categories,
- * such as Sentiment, Emotion, Toxicity, Truthfulness, and Bias.
+ * Generates a system prompt for fact-checking based on the given summary context.
+ * The prompt specifies strict instructions on output format and constraints.
  *
- * @param {string} summary - The summary of the content to provide context to the model.
- * @returns {string} A formatted prompt that guides the analysis model in structured output.
+ * @param {string} summary - Context for the fact-checking operation, typically from a summary of related information.
+ * @returns {string} - The constructed system prompt to guide the model's fact-checking output.
  */
-function getAnalysisPrompt(summary) {
-    return `You will be given text to analyze with the given context: ${summary}
+function getFactCheckPrompt(summary) {
+    return `You will be given text to fact-check with the given context: ${summary}
 
             Only use English.
             Ignore text you're not trained on.
             Don't output language you're not trained on.
             Bold Titles.
-            Analyze the text and output in this exact format without including what's in parentheses:
-                1. Attributes:
-                - Sentiment(e.g., Positive, Negative, Neutral): Explanation
-                - Emotion(What emotion can be interpreted from the text): Explanation
-                - Toxicity(e.g., High, Moderate, Low, None): Explanation
-                - Truthfulness(e.g., High, Moderate, Low, Uncertain): Explanation
-                - Bias(e.g., High, Moderate, Low, None): Explanation
-                
-                2. Logical Fallacies: (Identify any logical fallacies present and provide a brief explanation for each)
-                - [List of logical fallacies and explanations]
-                
-                3. Ulterior Motives: (Assess if there are any ulterior motives behind the text and explain)
-                - [List of potential ulterior motives]
+            Fact check the text and output in this exact format without including what's in parentheses:
+                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
 
-                4. Overall Analysis: (Provide an overall analysis of the text)
-                - [Detailed analysis of the implications and context of the text]
+                Explanation: (Give an explanation of the fact check)
             
             Again: Do NOT include what is in parentheses in the format.
         `;

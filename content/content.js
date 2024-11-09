@@ -1,6 +1,6 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
 import { define } from './utilities/define.js';
-import { factCheck } from './utilities/faceCheck.js';
+import { factCheck } from './utilities/factCheck.js';
 import { generateAnalysis } from './utilities/analyze.js';
 import { generateSummary } from './utilities/summarize.js';
 import { getPageContent } from './utilities/getPageContent.js';
@@ -111,10 +111,21 @@ async function analyzeContent(pageData) {
     analysisText.innerHTML = '';
     const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
 
+    // Function to update the bubble content
+    const updateAnalysisContent = (content) => {
+        analysisText.innerHTML = `<span>${formatTextResponse(analysis)}</span>`;
+    };
+
+    // Define the error callback to use the update function
+    const onAnalysisErrorUpdate = (errorMessage) => {
+        updateAnalysisContent(errorMessage);
+    };
+
     // Analyze selected content
-    const analysisContent = document.getElementById('analysis');
-    const analysis = await generateAnalysis(pageData);
-    analysisContent.innerHTML = `<span>${formatTextResponse(analysis)}</span>`;
+    const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
+
+    // Final update with the result or final failure message
+    updateAnalysisContent(analysis);
 
     loadingSpinner.remove();
     analysisReady = true;
@@ -132,29 +143,57 @@ async function displayBubble(selectedText, type) {
 
     if (type === "factCheckBubble") {
         const factCheckBubble = document.getElementById(type);
-        result = await factCheck(selectedText);
-        factCheckBubble.innerHTML = `
-        <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    } else if (type === "defineBubble") {
+
+        // Function to update the bubble content
+        const updateFactCheckBubbleContent = (content) => {
+            factCheckBubble.innerHTML = `
+                <div class="bubble-title">Fact Check</div>
+                <div class="bubble-content">${formatTextResponse(content)}</div>
+                <footer class="bubble-footer">
+                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                </footer>
+            `;
+        };
+
+        // Define the error callback to use the update function
+        const onFactCheckErrorUpdate = (errorMessage) => {
+            updateFactCheckBubbleContent(errorMessage);
+        };
+
+        result = await factCheck(selectedText, onFactCheckErrorUpdate);
+
+        // Final update with the result or final failure message
+        updateFactCheckBubbleContent(result);
+    } 
+    else if (type === "defineBubble") {
         const defineBubble = document.getElementById(type);
-        result = await define(selectedText);
-        defineBubble.innerHTML = `
-        <div class="bubble-title">Define</div>
-        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    } else if (type === "analysisBubble") {
+
+        // Function to update the bubble content
+        const updateDefineBubbleContent = (content) => {
+            defineBubble.innerHTML = `
+                <div class="bubble-title">Define</div>
+                <div class="bubble-content">${formatTextResponse(content)}</div>
+                <footer class="bubble-footer">
+                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                </footer>
+            `;
+        };
+
+        // Define the error callback to use the update function
+        const onDefineErrorUpdate = (errorMessage) => {
+            updateDefineBubbleContent(errorMessage);
+        };
+
+        result = await define(selectedText, onDefineErrorUpdate);
+
+        // Final update with the result or final failure message
+        updateDefineBubbleContent(result);
+    } 
+    else if (type === "analysisBubble") {
         const analyzeBubble = document.getElementById(type);
 
         if (!analyzeButton._listenerAdded) {
-            // Listener removes after analysis button pressed
+
             document.getElementById('analyzeButton').addEventListener('click', async () => {
                 const filteredText = selectedText
                     .split('\n')
@@ -163,16 +202,19 @@ async function displayBubble(selectedText, type) {
 
                 if (filteredText.length === 0 || filteredText.length > 4000) {
                     const errorText = filteredText.length === 0
-                        ? "Text must be highlighted."
-                        : "Selected characters must be under 4000.";
+                        ? "Error: Text must be highlighted."
+                        : "Error: Selected characters must be under 4000.";
                     displayError(errorText);
+                    analyzeButton.remove();
+                    document.getElementById("currentCharCount").remove();
+                    document.getElementById("bubbleText").remove();
                     return;
                 }
                 analyzeBubble.remove();
 
                 // Analysis Starts
                 await analyzeContent(filteredText);
-            }, { once: true })
+            });
 
             analyzeButton._listenerAdded = true;
         }
@@ -186,9 +228,13 @@ function updateCharacterCount() {
     const currentElementClass = document.getElementById("currentCharCount");
     if (currentElementClass) {
         const selectedText = window.getSelection().toString();
+        const filteredText = selectedText
+        .split('\n')
+        .filter(line => (line.match(/ /g) || []).length >= 8)
+        .join('\n');
         let characterCount = 0;
 
-        try { characterCount = selectedText.length; }
+        try { characterCount = filteredText.length; }
         catch (error) { return; }
 
         if (characterCount > 0) {
@@ -207,13 +253,16 @@ function updateCharacterCount() {
  * @param {string} message - The error message to display.
  */
 function displayError(message) {
-    const analyzeBoxContainer = document.querySelector('bubble-content');
+    const analyzeBubble = document.getElementById('analysisBubble');
+    const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content')
+    
     let errorMessage = document.querySelector('.error-message');
     if (!errorMessage) {
         errorMessage = document.createElement('div');
         errorMessage.classList.add('error-message');
         errorMessage.style.color = 'red';
         errorMessage.style.marginBottom = '10px';
+        errorMessage.style.marginTop = '10px';
         errorMessage.style.textAlign = 'center';
         errorMessage.style.fontSize = '1em';
         errorMessage.style.fontWeight = '500';
