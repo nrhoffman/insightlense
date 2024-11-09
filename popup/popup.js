@@ -1,34 +1,37 @@
+let listenersInitialized = false;  // Flag to check if listeners are initialized
+
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
 const analyzeButton = document.getElementById('analyzeButton');
 const chatWindow = document.getElementById('chatWindow');
 const outputElement = document.createElement('p');
 
-// Listener for messages from sidebar
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+/**
+ * Listener function for messages from the sidebar. This processes specific actions 
+ * from the sidebar, enabling/disabling buttons and updating the chat window.
+ *
+ * @param {Object} request - Contains the action type and any data sent from the sidebar.
+ * @param {Object} sender - Information about the sender of the message.
+ * @param {function} sendResponse - Function to send a response back to the sender.
+ */
+const onMessageListener = (request, sender, sendResponse) => {
   outputElement.className = 'bot-p';
 
   switch (request.action) {
-
-    // Activates analysis button when summary generation is complete
     case "activateSummaryButton":
       summarizeButton.disabled = false;
       break;
-
-    // Activates chat bot send button when model is ready
     case "activateSendButton":
       sendButton.disabled = false;
       chatWindow.innerHTML = '';
-      outputElement.textContent = `Chatbot: I'm ready for any questions.`;
+      outputElement.textContent = "Chatbot: I'm ready for any questions.";
 
       // Append the new output element to the chat window
       chatWindow.appendChild(outputElement);
       break;
-
-    // Adds output message to chat
     case "setChatBotOutput":
       sendButton.disabled = false;
-      outputElement.textContent = `Chatbot: ${request.output}`;
+      outputElement.innerHTML = `Chatbot: ${request.output}`;
 
       // Append the new output element to the chat window
       chatWindow.appendChild(outputElement);
@@ -37,7 +40,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       chatWindow.scrollTop = chatWindow.scrollHeight;
       break;
   }
-});
+};
+
+/**
+ * Initializes message and button click listeners if they have not been initialized yet.
+ * Ensures that listeners are only attached once to avoid duplicate actions.
+ */
+function initializeListeners() {
+  if (!listenersInitialized) {
+    chrome.runtime.onMessage.addListener(onMessageListener);
+    listenersInitialized = true;
+
+    // Attach button listeners for summarize and send buttons
+    summarizeButton.addEventListener('click', summarizeContent);
+    sendButton.addEventListener('click', sendChatMessage);
+  }
+}
+
+/**
+ * Removes message and button click listeners to prevent memory leaks.
+ * Ensures that listeners are detached when the popup closes.
+ */
+function removeListeners() {
+  if (listenersInitialized) {
+    chrome.runtime.onMessage.removeListener(onMessageListener);
+    summarizeButton.removeEventListener('click', summarizeContent);
+    sendButton.removeEventListener('click', sendChatMessage);
+    listenersInitialized = false;
+  }
+}
+
+// Ensure listeners are cleaned up when the popup closes (or window is removed)
+chrome.windows.onRemoved.addListener(removeListeners);
 
 // Run when popup is opened
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
@@ -63,7 +97,6 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
 
   // If Initialization isn't running, run it
   if (status.initializationStatus === "no") {
-
     // Send the message to initialize model
     chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
   }
@@ -72,7 +105,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   if (status.modelStatus === "yes") {
     sendButton.disabled = false;
     chatWindow.innerHTML = '';
-    outputElement.textContent = `Chatbot: I'm ready for any questions.`;
+    outputElement.textContent = "Chatbot: I'm ready for any questions.";
 
     // Append the new output element to the chat window
     chatWindow.appendChild(outputElement);
@@ -83,10 +116,16 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     summarizeButton.disabled = false;
   }
 
+  // Initialize listeners
+  initializeListeners();
 });
 
-// Summarize button is pressed
-document.getElementById('summarizeButton').addEventListener('click', async () => {
+/**
+ * Handles the click event for the summarize button. Sends a message to the content
+ * script to start summarizing the selected content. Updates the button state to disabled
+ * while the summarization is in progress.
+ */
+async function summarizeContent() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const userInput = document.getElementById('userInput');
 
@@ -96,10 +135,14 @@ document.getElementById('summarizeButton').addEventListener('click', async () =>
     console.log("Sending summarize message...");
     chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
   });
-});
+}
 
-// Send button for chat bot is pressed
-document.getElementById('sendButton').addEventListener('click', async () => {
+/**
+ * Handles the click event for the send button in the chat window. Sends the user’s input 
+ * message to the chatbot for a response. Updates the chat window to display the user’s 
+ * message and handles UI scrolling and button state.
+ */
+async function sendChatMessage() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const userInput = document.getElementById('chatInput');
     const chatWindow = document.getElementById('chatWindow');
@@ -107,7 +150,6 @@ document.getElementById('sendButton').addEventListener('click', async () => {
     userInput.value = '';
 
     // Update Send Button State
-    const sendButton = document.getElementById('sendButton');
     sendButton.disabled = true;
 
     // Create a new paragraph element for the input
@@ -123,4 +165,4 @@ document.getElementById('sendButton').addEventListener('click', async () => {
 
     chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
   });
-});
+}

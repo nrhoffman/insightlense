@@ -1,7 +1,11 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
+import { define } from './utilities/define.js';
+import { factCheck } from './utilities/faceCheck.js';
+import { generateAnalysis } from './utilities/analyze.js';
+import { generateSummary } from './utilities/summarize.js';
 import { getPageContent } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
-import { generateSummary } from './utilities/summarize.js';
+import { populateBubble, bubbleDragging } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
 let modelInstance = null;
@@ -12,7 +16,6 @@ let initializationReady = false;
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
     switch (request.action) {
         case "initializeModel":
             initModel();
@@ -21,9 +24,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'summarizeContent':
             summarizeContent(request.focusInput);
-            break;
-        case 'analyzeContent':
-            analyzeContent(request.pageData);
             break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
@@ -55,7 +55,7 @@ document.addEventListener("keyup", updateCharacterCount);
 
 // Listen for the page unload event to cleanup the model
 window.addEventListener('beforeunload', () => {
-    if(modelInstance){
+    if (modelInstance) {
         modelInstance.destroy();
         console.log("Chat Bot Model Destroyed");
     }
@@ -63,7 +63,10 @@ window.addEventListener('beforeunload', () => {
     document.removeEventListener("keyup", updateCharacterCount);
 });
 
-async function initModel(){
+/**
+ * Initializes the chatbot model and sends activation messages for sidebar buttons.
+ */
+async function initModel() {
     initializationReady = true;
 
     // Request page content
@@ -76,7 +79,10 @@ async function initModel(){
     modelReady = true;
 }
 
-// Function fills the sidebar with a summary
+/**
+ * Generates a summary for the current page content and updates the sidebar.
+ * @param {string} focusInput - Optional input to focus the summary on a specific topic.
+ */
 async function summarizeContent(focusInput) {
     summarizationReady = false;
     const summary = document.getElementById('summary');
@@ -95,308 +101,87 @@ async function summarizeContent(focusInput) {
     summarizationReady = true;
 }
 
-// Function checks if summary exists and notify popup
-function checkSummary() {
-    const summary = document.getElementById('summary');
-    return summary.innerText !== "";
-}
-
-// Function that gets
-async function getChatBotOutput(input) {
-    if(modelInstance){
-        const result = await modelInstance.prompt(input);
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: result });
-    }
-    else{
-        chrome.runtime.sendMessage({ action: "setChatBotOutput", output: "Error... Model crashed..." });
-    }
-}
-
-// Function that displays fact check bubble
-async function displayBubble(selectedText, type) {
-    let bubble = document.querySelector(`.${type}`);
-    if (!bubble) {
-        bubble = document.createElement("div");
-        bubble.id = `${type}`;
-        bubble.classList.add(`${type}`);
-        document.body.appendChild(bubble);
-    }
-
-    // Get selection position to place bubble
-    const selection = window.getSelection();
-    const range = selection.getRangeAt(0).getBoundingClientRect();
-    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
-    bubble.style.left = `${window.scrollX + range.left}px`;
-
-    const summaryEl = document.getElementById('summary');
-    const summary = summaryEl.textContent;
-
-    // Close bubble on click
-    bubble.addEventListener("dblclick", () => bubble.remove());
-    makeBubbleDraggable(bubble);
-
-    if (type !== "defineBubble") {
-        // Error message if the summary is empty
-        if (summaryEl.innerText === "") {
-            displayErrorMessage(bubble);
-            return;
-        }
-        else { bubble.style.color = '#ffffff'; }
-    }
-
-    if (type === 'factCheckBubble' || type === 'defineBubble') { await fillInBubble(bubble, type, summary, selectedText); }
-    else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble, summary, selectedText); }
-}
-
-// Function to make the bubble draggable
-function makeBubbleDraggable(bubble) {
-    let offsetX, offsetY;
-    let isDragging = false;
-
-    bubble.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        isDragging = true;
-
-        // Calculate the offset
-        offsetX = e.clientX - bubble.getBoundingClientRect().left;
-        offsetY = e.clientY - bubble.getBoundingClientRect().top;
-
-        const onMouseMove = (e) => {
-            if (isDragging) {
-                // Update bubble's position based on mouse movement
-                bubble.style.left = `${e.pageX - offsetX}px`;
-                bubble.style.top = `${e.pageY - offsetY}px`;
-            }
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener("mousemove", onMouseMove);
-            document.removeEventListener("mouseup", onMouseUp);
-            isDragging = false;
-        };
-
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
-    });
-}
-
-function displayErrorMessage(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Error</div>
-    <div class="bubble-content">Wait until summary generation completes.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-}
-
-async function fillInBubble(bubble, type, summary, selectedText) {
-    // Placeholder text while loading fact check result
-    if (type === 'factCheckBubble') {
-        bubble.innerHTML = `
-        <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">Checking facts...</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-
-    // Placeholder text while loading definition result
-    else {
-        bubble.innerHTML = `
-        <div class="bubble-title">Define</div>
-        <div class="bubble-content">Fetching definition...</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-    
-    let result = '';
-    try {
-        const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-        if (available !== "no") {
-            let session = null;
-
-            // Fetch result - Further lines format the result properly
-            if (type === 'factCheckBubble') {
-                session = await ai.languageModel.create({
-                    systemPrompt: getFactCheckPrompt(summary)
-                });
-                result = await session.prompt(`Analyze: "${selectedText}"`);
-            }
-            else {
-                session = await ai.languageModel.create({
-                    systemPrompt: "Give the definition"
-                });
-                result = await session.prompt(`Define: "${selectedText}"`);
-            }
-
-            result = formatTextResponse(result);
-
-            session.destroy();
-        }
-    } catch (error) {
-        if (error.message === "Other generic failures occurred.") {
-            result = `Other generic failures occurred. Retrying...`;
-        }
-        else { result = error.message; }
-        console.error("Error generating content:", error);
-    }
-
-    bubble.innerHTML = '';
-    if (type === 'factCheckBubble') {
-        bubble.innerHTML = `
-        <div class="bubble-title">Fact Checker</div>
-        <div class="bubble-content">${result || "Error fetching result."}</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-    else {
-        bubble.innerHTML = `
-        <div class="bubble-title">Define</div>
-        <div class="bubble-content">${result || "Error fetching result."}</div>
-        <footer class="bubble-footer">
-            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-        </footer>
-        `;
-    }
-}
-
-function getFactCheckPrompt(summary) {
-    return `You will be given text to fact-check with the given context: ${summary}
-
-            Only use English.
-            Ignore text you're not trained on.
-            Don't output language you're not trained on.
-            Bold Titles.
-            Fact check the text and output in this exact format without including what's in parantheses:
-                Fact Check Result: (True, Partially True, False, Unverified, Opinion)
-
-                Explanation: (Give an explanation of the fact check)
-            
-            Again: Do NOT include what is in parantheses in the format.
-        `;
-}
-
-function fillInAnalysisBubble(bubble, summary, selectedText) {
-    bubble.innerHTML = '';
-    bubble.innerHTML = `
-    <div class="bubble-title">Analyze</div>
-    <div class="bubble-content">
-        <div id="bubbleText">Max Character Count: 4000</div>
-        <div id="currentCharCount">Current Characters Selected: 0</div>
-        <button id="analyzeButton">Analyze</button>
-    </div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
-    `;
-
-    const analyzeButton = bubble.querySelector('#analyzeButton');
-
-    const analyzeButtonClickHandler = async () => {
-        const analysisText = document.getElementById('analysis');
-        analysisText.innerHTML = '';
-        const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
-        analyzeButton.removeEventListener('click', analyzeButtonClickHandler);
-    
-        const filteredText = selectedText
-            .split('\n')
-            .filter(line => (line.match(/ /g) || []).length >= 8)
-            .join('\n');
-    
-        if (filteredText.length === 0 || filteredText.length > 4000) {
-            const errorText = filteredText.length === 0
-                ? "Text must be highlighted."
-                : "Selected characters must be under 4000.";
-            displayError(errorText);
-            return;
-        }
-    
-        bubble.remove();
-        await analyzeContent(filteredText);
-        loadingSpinner.remove();
-    }
-
-    // Analyze button is pressed
-    analyzeButton.addEventListener('click', analyzeButtonClickHandler);
-}
-
-// Function that populates the analysis portion of the sidebar
+/**
+ * Analyzes a portion of page content and displays the result in the sidebar.
+ * @param {string} pageData - Content data for analysis.
+ */
 async function analyzeContent(pageData) {
     analysisReady = false;
+    const analysisText = document.getElementById('analysis');
+    analysisText.innerHTML = '';
+    const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
+
+    // Analyze selected content
     const analysisContent = document.getElementById('analysis');
-    analysisContent.innerHTML = `<span>${await analyzePageText(pageData)}</span>`;
+    const analysis = await generateAnalysis(pageData);
+    analysisContent.innerHTML = `<span>${formatTextResponse(analysis)}</span>`;
+
+    loadingSpinner.remove();
     analysisReady = true;
 }
 
-// Function that analyzes web page content
-async function analyzePageText(pageData, retries = 10, delay = 1000) {
+/**
+ * Displays a draggable bubble with the result of defining, fact-checking, or analyzing selected text.
+ * @param {string} selectedText - Text selected by the user.
+ * @param {string} type - Type of bubble to display (define, factCheck, or analysis).
+ */
+async function displayBubble(selectedText, type) {
     let result = '';
-    const summary = document.getElementById('summary').textContent;
 
-    const session = await ai.languageModel.create({ systemPrompt: getAnalysisPrompt(summary) });
+    await populateBubble(type);
 
-    let attempt = 0;
+    if (type === "factCheckBubble") {
+        const factCheckBubble = document.getElementById(type);
+        result = await factCheck(selectedText);
+        factCheckBubble.innerHTML = `
+        <div class="bubble-title">Fact Checker</div>
+        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    } else if (type === "defineBubble") {
+        const defineBubble = document.getElementById(type);
+        result = await define(selectedText);
+        defineBubble.innerHTML = `
+        <div class="bubble-title">Define</div>
+        <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+        `;
+    } else if (type === "analysisBubble") {
+        const analyzeBubble = document.getElementById(type);
 
-    while (attempt < retries) {
-        try {
-            result = await session.prompt(`Analyze: "${pageData}"`);
-            break;
-        } catch (error) {
-            console.log(`Error analyzing content on attempt ${attempt + 1}:`, error);
-            attempt++;
-            if (attempt < retries) {
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                delay *= 2;
-            } else {
-                console.log("Max retries reached. Returning empty analysis.");
-                result = "Analysis failed after multiple attempts.";
-            }
+        if (!analyzeButton._listenerAdded) {
+            // Listener removes after analysis button pressed
+            document.getElementById('analyzeButton').addEventListener('click', async () => {
+                const filteredText = selectedText
+                    .split('\n')
+                    .filter(line => (line.match(/ /g) || []).length >= 8)
+                    .join('\n');
+
+                if (filteredText.length === 0 || filteredText.length > 4000) {
+                    const errorText = filteredText.length === 0
+                        ? "Text must be highlighted."
+                        : "Selected characters must be under 4000.";
+                    displayError(errorText);
+                    return;
+                }
+                analyzeBubble.remove();
+
+                // Analysis Starts
+                await analyzeContent(filteredText);
+            }, { once: true })
+
+            analyzeButton._listenerAdded = true;
         }
     }
-
-    session.destroy();
-
-    return formatTextResponse(result);
 }
 
-// Helper function to get the analysis prompt
-function getAnalysisPrompt(summary) {
-    return `You will be given text to analyze with the given context: ${summary}
-
-            Only use English.
-            Ignore text you're not trained on.
-            Don't output language you're not trained on.
-            Bold Titles.
-            Analyze the text and output in this exact format without including what's in parantheses:
-                1. Attributes:
-                - Sentiment(e.g., Positive, Negative, Neutral): Explanation
-                - Emotion(What emotion can be interpreted from the text): Explanation
-                - Toxicity(e.g., High, Moderate, Low, None): Explanation
-                - Truthfulness(e.g., High, Moderate, Low, Uncertain): Explanation
-                - Bias(e.g., High, Moderate, Low, None): Explanation
-                
-                2. Logical Falacies: (Identify any logical fallacies present and provide a brief explanation for each)
-                - [List of logical fallacies and explanations]
-                
-                3. Ulterior Motives: (Assess if there are any ulterior motives behind the text and explain)
-                - [List of potential ulterior motives]
-
-                4. Overall Analysis: (Provide an overall analysis of the text)
-                - [Detailed analysis of the implications and context of the text]
-            
-            Again: Do NOT include what is in parantheses in the format.
-        `;
-}
-
-// Function to update the character count
+/**
+ * Updates character count in the sidebar based on the text currently selected by the user.
+ */
 function updateCharacterCount() {
     const currentElementClass = document.getElementById("currentCharCount");
     if (currentElementClass) {
@@ -417,7 +202,10 @@ function updateCharacterCount() {
     }
 }
 
-// Function to display error when analyze button is pressed and conditions are met
+/**
+ * Displays an error message if conditions are not met when analyze button is pressed.
+ * @param {string} message - The error message to display.
+ */
 function displayError(message) {
     const analyzeBoxContainer = document.querySelector('bubble-content');
     let errorMessage = document.querySelector('.error-message');
@@ -434,22 +222,56 @@ function displayError(message) {
     errorMessage.innerText = message;
 }
 
-// Function that formats response from model
+/**
+ * Formats model response by applying HTML tags for emphasis, bold, bullets, and line breaks.
+ * @param {string} response - Text response from model.
+ * @returns {string} - Formatted HTML string.
+ */
 function formatTextResponse(response) {
-    // Replace `##text` with ``
     let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
-
-    // Replace `**text**` with `<strong>text</strong>`
     htmlData = htmlData.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
-    // Replace single `*` at the start of a line with a bullet point
     htmlData = htmlData.replace(/^\s*\*\s+/gm, "• ");
-
-    // Replace remaining single `*text*` with `<em>text</em>` (italic)
     htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
-
-    // Convert line breaks to HTML <br> tags
     htmlData = htmlData.replace(/\n/g, "<br>");
-
     return htmlData;
+}
+
+/**
+ * Checks if a summary has been generated and returns the status.
+ * @returns {boolean} - True if a summary is present, false otherwise.
+ */
+function checkSummary() {
+    const summary = document.getElementById('summary');
+    return summary.innerText !== "";
+}
+
+/**
+ * Retrieves output from chatbot model with retry logic if the request fails.
+ * @param {string} input - User input to send to the chatbot.
+ * @param {number} retries - Maximum number of retry attempts.
+ * @param {number} delay - Delay between retry attempts in milliseconds.
+ */
+async function getChatBotOutput(input, retries = 10, delay = 1000) {
+    let result = '';
+    let attempt = 0;
+
+    if (modelInstance) {
+        while (attempt < retries) {
+            try {
+                result = await modelInstance.prompt(input);
+                chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
+                break;
+            } catch (error) {
+                console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
+                attempt++;
+                if (attempt < retries) {
+                    console.log(`Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                } else {
+                    console.log("Max retries reached. Returning empty result.");
+                }
+            }
+        }
+    }
 }
