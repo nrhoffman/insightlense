@@ -16,7 +16,6 @@ let initializationReady = false;
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
     switch (request.action) {
         case "initializeModel":
             initModel();
@@ -64,6 +63,9 @@ window.addEventListener('beforeunload', () => {
     document.removeEventListener("keyup", updateCharacterCount);
 });
 
+/**
+ * Initializes the chatbot model and sends activation messages for sidebar buttons.
+ */
 async function initModel() {
     initializationReady = true;
 
@@ -77,7 +79,10 @@ async function initModel() {
     modelReady = true;
 }
 
-// Function fills the sidebar with a summary
+/**
+ * Generates a summary for the current page content and updates the sidebar.
+ * @param {string} focusInput - Optional input to focus the summary on a specific topic.
+ */
 async function summarizeContent(focusInput) {
     summarizationReady = false;
     const summary = document.getElementById('summary');
@@ -96,7 +101,10 @@ async function summarizeContent(focusInput) {
     summarizationReady = true;
 }
 
-// Function that populates the analysis portion of the sidebar
+/**
+ * Analyzes a portion of page content and displays the result in the sidebar.
+ * @param {string} pageData - Content data for analysis.
+ */
 async function analyzeContent(pageData) {
     analysisReady = false;
     const analysisText = document.getElementById('analysis');
@@ -112,7 +120,11 @@ async function analyzeContent(pageData) {
     analysisReady = true;
 }
 
-// Function that displays bubbles
+/**
+ * Displays a draggable bubble with the result of defining, fact-checking, or analyzing selected text.
+ * @param {string} selectedText - Text selected by the user.
+ * @param {string} type - Type of bubble to display (define, factCheck, or analysis).
+ */
 async function displayBubble(selectedText, type) {
     let result = '';
 
@@ -121,7 +133,6 @@ async function displayBubble(selectedText, type) {
     if (type === "factCheckBubble") {
         const factCheckBubble = document.getElementById(type);
         result = await factCheck(selectedText);
-        factCheckBubble.innerHTML = '';
         factCheckBubble.innerHTML = `
         <div class="bubble-title">Fact Checker</div>
         <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
@@ -129,11 +140,9 @@ async function displayBubble(selectedText, type) {
             <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
         </footer>
         `;
-    }
-    else if (type === "defineBubble") {
+    } else if (type === "defineBubble") {
         const defineBubble = document.getElementById(type);
         result = await define(selectedText);
-        defineBubble.innerHTML = '';
         defineBubble.innerHTML = `
         <div class="bubble-title">Define</div>
         <div class="bubble-content">${formatTextResponse(result) || "Error fetching result."}</div>
@@ -141,8 +150,7 @@ async function displayBubble(selectedText, type) {
             <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
         </footer>
         `;
-    }
-    else if (type === "analysisBubble") {
+    } else if (type === "analysisBubble") {
         const analyzeBubble = document.getElementById(type);
 
         if (!analyzeButton._listenerAdded) {
@@ -171,7 +179,9 @@ async function displayBubble(selectedText, type) {
     }
 }
 
-// Function to update the character count
+/**
+ * Updates character count in the sidebar based on the text currently selected by the user.
+ */
 function updateCharacterCount() {
     const currentElementClass = document.getElementById("currentCharCount");
     if (currentElementClass) {
@@ -192,7 +202,10 @@ function updateCharacterCount() {
     }
 }
 
-// Function to display error when analyze button is pressed and conditions are met
+/**
+ * Displays an error message if conditions are not met when analyze button is pressed.
+ * @param {string} message - The error message to display.
+ */
 function displayError(message) {
     const analyzeBoxContainer = document.querySelector('bubble-content');
     let errorMessage = document.querySelector('.error-message');
@@ -209,44 +222,42 @@ function displayError(message) {
     errorMessage.innerText = message;
 }
 
-// Function that formats response from model
+/**
+ * Formats model response by applying HTML tags for emphasis, bold, bullets, and line breaks.
+ * @param {string} response - Text response from model.
+ * @returns {string} - Formatted HTML string.
+ */
 function formatTextResponse(response) {
-    // Replace `##text` with ``
     let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
-
-    // Replace `**text**` with `<strong>text</strong>`
     htmlData = htmlData.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
-    // Replace single `*` at the start of a line with a bullet point
     htmlData = htmlData.replace(/^\s*\*\s+/gm, "• ");
-
-    // Replace remaining single `*text*` with `<em>text</em>` (italic)
     htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
-
-    // Convert line breaks to HTML <br> tags
     htmlData = htmlData.replace(/\n/g, "<br>");
-
     return htmlData;
 }
 
-// Function checks if summary exists and notify popup
+/**
+ * Checks if a summary has been generated and returns the status.
+ * @returns {boolean} - True if a summary is present, false otherwise.
+ */
 function checkSummary() {
     const summary = document.getElementById('summary');
     return summary.innerText !== "";
 }
 
-// Function that gets output from chat bot
+/**
+ * Retrieves output from chatbot model with retry logic if the request fails.
+ * @param {string} input - User input to send to the chatbot.
+ * @param {number} retries - Maximum number of retry attempts.
+ * @param {number} delay - Delay between retry attempts in milliseconds.
+ */
 async function getChatBotOutput(input, retries = 10, delay = 1000) {
     let result = '';
     let attempt = 0;
 
     if (modelInstance) {
-
-        // Retry logic: Try initializing the model up to the specified number of retries
         while (attempt < retries) {
             try {
-
-                // Attempt to initialize the model with the current chunk of content
                 result = await modelInstance.prompt(input);
                 chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
                 break;
@@ -254,14 +265,10 @@ async function getChatBotOutput(input, retries = 10, delay = 1000) {
                 console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
                 attempt++;
                 if (attempt < retries) {
-
-                    // If retries are left, wait for a certain time before trying again
                     console.log(`Retrying in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2;
                 } else {
-
-                    // If the maximum number of retries is reached, return a failure message
                     console.log("Max retries reached. Returning empty result.");
                 }
             }

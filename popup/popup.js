@@ -6,7 +6,14 @@ const analyzeButton = document.getElementById('analyzeButton');
 const chatWindow = document.getElementById('chatWindow');
 const outputElement = document.createElement('p');
 
-// Listener for messages from sidebar
+/**
+ * Listener function for messages from the sidebar. This processes specific actions 
+ * from the sidebar, enabling/disabling buttons and updating the chat window.
+ *
+ * @param {Object} request - Contains the action type and any data sent from the sidebar.
+ * @param {Object} sender - Information about the sender of the message.
+ * @param {function} sendResponse - Function to send a response back to the sender.
+ */
 const onMessageListener = (request, sender, sendResponse) => {
   outputElement.className = 'bot-p';
 
@@ -35,7 +42,10 @@ const onMessageListener = (request, sender, sendResponse) => {
   }
 };
 
-// This function initializes the listeners if they haven't been initialized yet
+/**
+ * Initializes message and button click listeners if they have not been initialized yet.
+ * Ensures that listeners are only attached once to avoid duplicate actions.
+ */
 function initializeListeners() {
   if (!listenersInitialized) {
     chrome.runtime.onMessage.addListener(onMessageListener);
@@ -47,7 +57,10 @@ function initializeListeners() {
   }
 }
 
-// This function removes the listeners when the popup is closed
+/**
+ * Removes message and button click listeners to prevent memory leaks.
+ * Ensures that listeners are detached when the popup closes.
+ */
 function removeListeners() {
   if (listenersInitialized) {
     chrome.runtime.onMessage.removeListener(onMessageListener);
@@ -107,7 +120,11 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   initializeListeners();
 });
 
-// Summarize button click handler
+/**
+ * Handles the click event for the summarize button. Sends a message to the content
+ * script to start summarizing the selected content. Updates the button state to disabled
+ * while the summarization is in progress.
+ */
 async function summarizeContent() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const userInput = document.getElementById('userInput');
@@ -120,7 +137,11 @@ async function summarizeContent() {
   });
 }
 
-// Send button click handler
+/**
+ * Handles the click event for the send button in the chat window. Sends the user’s input 
+ * message to the chatbot for a response. Updates the chat window to display the user’s 
+ * message and handles UI scrolling and button state.
+ */
 async function sendChatMessage() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const userInput = document.getElementById('chatInput');
