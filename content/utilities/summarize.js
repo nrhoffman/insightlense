@@ -23,11 +23,11 @@ export async function generateSummary(pageContent, focusInput, onErrorUpdate) {
  * @param {string} pageContent - The content to summarize.
  * @param {string} focusInput - Specific topic or focus area for the summary.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
- * @param {number} [retries=10] - Maximum retry attempts for summarization.
+ * @param {number} [retries=6] - Maximum retry attempts for summarization.
  * @param {number} [delay=1000] - Initial delay (in ms) between retry attempts.
  * @returns {Promise<string>} The summary result.
  */
-export async function summarizePageContent(pageContent, onErrorUpdate, retries = 10, delay = 1000) {
+export async function summarizePageContent(pageContent, onErrorUpdate, retries = 6, delay = 1000) {
     let result = '';
     let attempt = 0;
     let session = null;
@@ -137,11 +137,11 @@ async function summarizeLargePageContent(separateLines, maxChar, focusInput, onE
  * @param {Object} summarizer - The summarizer instance to process the prompt.
  * @param {string} prompt - Content to summarize.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
- * @param {number} [retries=10] - Maximum retry attempts for summarization.
+ * @param {number} [retries=6] - Maximum retry attempts for summarization.
  * @param {number} [delay=1000] - Initial delay (in ms) between retry attempts.
  * @returns {Promise<string>} The summary of the provided prompt.
  */
-export async function getSummary(session, prompt, onErrorUpdate, retries = 10, delay = 1000) {
+export async function getSummary(session, prompt, onErrorUpdate, retries = 6, delay = 1000) {
     let result = '';
     let attempt = 0;
 

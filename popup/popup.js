@@ -2,7 +2,7 @@ let listenersInitialized = false;  // Flag to check if listeners are initialized
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
-const analyzeButton = document.getElementById('analyzeButton');
+const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
 const outputElement = document.createElement('p');
 
@@ -20,6 +20,10 @@ const onMessageListener = (request, sender, sendResponse) => {
   switch (request.action) {
     case "activateSummaryButton":
       summarizeButton.disabled = false;
+      break;
+    case "activateRewriteButton":
+      rewriteButton.disabled = false;
+      rewriteButton.textContent = "Rewrite";
       break;
     case "activateSendButton":
       sendButton.disabled = false;
@@ -53,6 +57,7 @@ function initializeListeners() {
 
     // Attach button listeners for summarize and send buttons
     summarizeButton.addEventListener('click', summarizeContent);
+    rewriteButton.addEventListener('click', summarizeContent);
     sendButton.addEventListener('click', sendChatMessage);
   }
 }
@@ -65,6 +70,7 @@ function removeListeners() {
   if (listenersInitialized) {
     chrome.runtime.onMessage.removeListener(onMessageListener);
     summarizeButton.removeEventListener('click', summarizeContent);
+    rewriteButton.removeEventListener('click', summarizeContent);
     sendButton.removeEventListener('click', sendChatMessage);
     listenersInitialized = false;
   }
@@ -116,6 +122,12 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     summarizeButton.disabled = false;
   }
 
+  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
+  if (status.summaryGenStatus ==="no" && status.summarizationStatus === "yes" && status.analysisStatus === "yes") {
+    rewriteButton.disabled = false;
+    rewriteButton.textContent = "Rewrite";
+  }
+
   // Initialize listeners
   initializeListeners();
 });
@@ -131,6 +143,7 @@ async function summarizeContent() {
 
     // Update Summarize Button State
     summarizeButton.disabled = true;
+    rewriteButton.disabled = true;
 
     console.log("Sending summarize message...");
     chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });

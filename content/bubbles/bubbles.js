@@ -16,22 +16,45 @@ export async function populateBubble(type) {
 
     // Get selection position to place bubble
     const selection = window.getSelection();
+    const selectedText = selection.toString();
     const range = selection.getRangeAt(0).getBoundingClientRect();
     bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
     bubble.style.left = `${window.scrollX + range.left}px`;
 
     const summaryEl = document.getElementById('summary');
-    const summary = summaryEl.textContent;
 
     // Close bubble on double-click and make it draggable
     bubble.addEventListener("dblclick", () => bubble.remove(), { once: true });
     makeBubbleDraggable(bubble);
 
     if (type !== "defineBubble") {
+
         // Display error if summary is empty
-        if (summaryEl.innerText === "") {
-            displayErrorMessage(bubble);
-            return;
+        if (summaryEl.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
+            summaryEl.innerText === "") {
+            displayErrorSummary(bubble);
+            return "Error";
+        } else { 
+            bubble.style.color = '#ffffff'; 
+        }
+    }
+    else{
+
+        // Display error message if more than 100 characters selected for definition
+        if (selectedText.length > 100) {
+            displayErrorDefine(bubble);
+            return "Error";
+        } else { 
+            bubble.style.color = '#ffffff'; 
+        }
+    }
+
+    if (type !== "defineBubble") {
+        
+        // Display error message if more than 1000 characters for fact check
+        if (selectedText.length > 1000) {
+            displayErrorFactCheck(bubble);
+            return "Error";
         } else { 
             bubble.style.color = '#ffffff'; 
         }
@@ -41,6 +64,8 @@ export async function populateBubble(type) {
     if (type === 'factCheckBubble') { fillInFactCheckBubble(bubble); }
     else if (type === 'defineBubble') { fillInDefineBubble(bubble); }
     else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble); }
+
+    return "Pass";
 }
 
 /**
@@ -97,11 +122,45 @@ function makeBubbleDraggable(bubble) {
  * 
  * @param {HTMLElement} bubble - The bubble element in which to display the error message.
  */
-function displayErrorMessage(bubble) {
+function displayErrorSummary(bubble) {
     bubble.style.color = 'red';
     bubble.innerHTML = `
     <div class="bubble-title">Error</div>
     <div class="bubble-content">Wait until summary generation completes.</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+}
+
+/**
+ * Displays an error message in the define bubble when selected characters is more than 100.
+ * Sets the bubble text to inform the user to select less than 100 characters.
+ * 
+ * @param {HTMLElement} bubble - The bubble element in which to display the error message.
+ */
+function displayErrorDefine(bubble) {
+    bubble.style.color = 'red';
+    bubble.innerHTML = `
+    <div class="bubble-title">Error</div>
+    <div class="bubble-content">Intention for define is for words and phrases less than 100 characters.</div>
+    <footer class="bubble-footer">
+        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+    </footer>
+    `;
+}
+
+/**
+ * Displays an error message in the fact check bubble when selected characters is more than 1000.
+ * Sets the bubble text to inform the user to select less than 1000 characters.
+ * 
+ * @param {HTMLElement} bubble - The bubble element in which to display the error message.
+ */
+function displayErrorFactCheck(bubble) {
+    bubble.style.color = 'red';
+    bubble.innerHTML = `
+    <div class="bubble-title">Error</div>
+    <div class="bubble-content">Intention for fact check is to fact check bodies of text less than 1000 characters.</div>
     <footer class="bubble-footer">
         <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
     </footer>

@@ -5,11 +5,11 @@
  *
  * @param {string} selectedText - The text to be defined by the language model.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
- * @param {number} retries - Maximum number of retry attempts for the analysis (default is 10).
- * @param {number} delay - Initial delay between retries in milliseconds (default is 1000).
+ * @param {number} [retries=6] - Maximum number of retry attempts for the analysis (default is 6).
+ * @param {number} [delay=1000] - Initial delay between retries in milliseconds (default is 1000).
  * @returns {Promise<string>} - The definition of the selected text or an error message if the operation fails.
  */
-export async function factCheck(selectedText, onErrorUpdate, retries = 10, delay = 1000) {
+export async function factCheck(selectedText, onErrorUpdate, retries = 6, delay = 1000) {
     let result = '';
     let attempt = 0;
     let session = null;

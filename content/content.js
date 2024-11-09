@@ -109,6 +109,7 @@ async function summarizeContent(focusInput) {
 
     loadingSpinner.remove();
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
     summarizationReady = true;
 }
 
@@ -150,7 +151,9 @@ async function analyzeContent(pageData) {
 async function displayBubble(selectedText, type) {
     let result = '';
 
-    await populateBubble(type);
+    result = await populateBubble(type);
+
+    if (result === "Error") return;
 
     if (type === "factCheckBubble") {
         const factCheckBubble = document.getElementById(type);
@@ -303,7 +306,8 @@ function formatTextResponse(response) {
  */
 function checkSummary() {
     const summary = document.getElementById('summary');
-    return summary.innerText !== "";
+    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
+            summary.innerText === "");
 }
 
 /**
