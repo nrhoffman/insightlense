@@ -191,6 +191,7 @@ async function displayBubble(selectedText, type) {
     } 
     else if (type === "analysisBubble") {
         const analyzeBubble = document.getElementById(type);
+        const analyzeButton = document.getElementById('analyzeButton');
 
         if (!analyzeButton._listenerAdded) {
 

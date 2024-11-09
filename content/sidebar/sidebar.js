@@ -26,7 +26,9 @@ export function getOrCreateLoadingSpinner(parent) {
         loadingSpinner = document.createElement('div');
         loadingSpinner.id = 'loadingSpinner';
         loadingSpinner.classList.add('spinner');
-        parent.parentElement.insertBefore(loadingSpinner, parent);
+
+        const boxContainer = parent.closest('.box-container');
+        boxContainer.insertBefore(loadingSpinner, parent);
     }
     return loadingSpinner;
 }
@@ -44,9 +46,13 @@ function createSidebarElement() {
     sidebar.innerHTML = `
         <button id="closeSidebarBtn">✖️</button>
         <h3>Summary</h3>
-        <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
+        <div class="box-container">
+            <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
+        </div>
         <h3>Analysis</h3>
-        <p id="analysis">Highlight text, right click, and "Analyze". First generating summary can sometimes be beneficial.</p>
+        <div class="box-container">
+            <p id="analysis">Highlight text, right click, and "Analyze". First generating summary can sometimes be beneficial.</p>
+        </div>
     `;
     document.body.appendChild(sidebar);
     return sidebar;
