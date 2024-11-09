@@ -84,7 +84,11 @@ async function initModel() {
  * @param {string} focusInput - Optional input to focus the summary on a specific topic.
  */
 async function summarizeContent(focusInput) {
+
+    //Prevents accidental multiple sessions
+    if (!summarizationReady) return;
     summarizationReady = false;
+    
     const summary = document.getElementById('summary');
     summary.innerHTML = '';
     const loadingSpinner = getOrCreateLoadingSpinner(summary);
