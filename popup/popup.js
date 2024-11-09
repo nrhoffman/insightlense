@@ -84,13 +84,13 @@ chrome.windows.onRemoved.addListener(removeListeners);
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   const tabId = tabs[0].id;
 
-  
+
   // Ensure only one checkbox is selected at a time
   checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        checkboxes.forEach(cb => {
-            if (cb !== this) cb.checked = false;
-        });
+    checkbox.addEventListener('change', function () {
+      checkboxes.forEach(cb => {
+        if (cb !== this) cb.checked = false;
+      });
     });
   });
 
@@ -129,12 +129,14 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   }
 
   // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.modelStatus === "yes" && status.summarizationStatus === "yes" && status.analysisStatus === "yes") {
+  if (status.modelStatus === "yes" && status.summarizationStatus === "yes" &&
+    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
     summarizeButton.disabled = false;
   }
 
   // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.summaryGenStatus ==="no" && status.summarizationStatus === "yes" && status.analysisStatus === "yes") {
+  if (status.summaryGenStatus === "no" && status.summarizationStatus === "yes" &&
+    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
     rewriteButton.disabled = false;
     rewriteButton.textContent = "Rewrite";
   }
@@ -168,14 +170,30 @@ async function summarizeContent() {
  */
 async function rewriteContent() {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    const userInput = document.getElementById('userInput');
 
-    // Update Summarize Button State
+    // Get the selected reading level from the checkboxes
+    let selectedReadingLevel = '';
+    const childrenCheckbox = document.getElementById('childrenLevel');
+    const collegeCheckbox = document.getElementById('collegeLevel');
+    const currentCheckbox = document.getElementById('currentLevel');
+
+    if (childrenCheckbox.checked) {
+      selectedReadingLevel = `a children's reading level`;
+    } else if (collegeCheckbox.checked) {
+      selectedReadingLevel = 'a college reading level';
+    } else if (currentCheckbox.checked) {
+      selectedReadingLevel = `the reading level it's currently at`;
+    }
+
+    // Update Summarize and Rewrite Button State
     summarizeButton.disabled = true;
     rewriteButton.disabled = true;
 
-    console.log("Sending summarize message...");
-    chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
+    console.log("Sending rewrite message...");
+    chrome.tabs.sendMessage(tabs[0].id, {
+      action: "rewriteContent",
+      readingLevel: selectedReadingLevel
+    });
   });
 }
 

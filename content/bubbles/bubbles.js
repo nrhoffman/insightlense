@@ -49,7 +49,7 @@ export async function populateBubble(type) {
         }
     }
 
-    if (type !== "defineBubble") {
+    if (type === "factCheckBubble") {
         
         // Display error message if more than 1000 characters for fact check
         if (selectedText.length > 1000) {
@@ -128,7 +128,7 @@ function displayErrorSummary(bubble) {
     <div class="bubble-title">Error</div>
     <div class="bubble-content">Wait until summary generation completes.</div>
     <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
     </footer>
     `;
 }
@@ -145,7 +145,7 @@ function displayErrorDefine(bubble) {
     <div class="bubble-title">Error</div>
     <div class="bubble-content">Intention for define is for words and phrases less than 100 characters.</div>
     <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
     </footer>
     `;
 }
@@ -162,7 +162,7 @@ function displayErrorFactCheck(bubble) {
     <div class="bubble-title">Error</div>
     <div class="bubble-content">Intention for fact check is to fact check bodies of text less than 1000 characters.</div>
     <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
     </footer>
     `;
 }

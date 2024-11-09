@@ -11,6 +11,7 @@ console.log("Content script loaded");
 let modelInstance = null;
 let modelReady = false;
 let summarizationReady = true;
+let rewriteReady = true;
 let analysisReady = true;
 let initializationReady = false;
 
@@ -24,6 +25,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'summarizeContent':
             summarizeContent(request.focusInput);
+            break;
+        case 'rewriteContent':
+            rewriteContent(request.readingLevel);
             break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
@@ -43,7 +47,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 summarizationStatus: summarizationReady ? "yes" : "no",
                 analysisStatus: analysisReady ? "yes" : "no",
                 initializationStatus: initializationReady ? "yes" : "no",
-                summaryGenStatus: checkSummary() ? "yes" : "no"
+                summaryGenStatus: checkSummary() ? "yes" : "no",
+                rewriteStatus: rewriteReady ? "yes" : "no"
             });
             break;
     }
@@ -118,6 +123,26 @@ async function summarizeContent(focusInput) {
 }
 
 /**
+ * Rewrites the contents on the webpage to have no bias or logical falacies at the desired reading level
+ * @param {string} readingLevel - Desired reading level for the rewrite
+ */
+async function rewriteContent(readingLevel) {
+
+    //Prevents accidental multiple sessions
+    if (!rewriteReady) return;
+    rewriteReady = false;
+    
+    const summary = document.getElementById('summary').innerText;
+
+    console.log("REWRITE");
+    await new Promise(r => setTimeout(r, 10000));
+
+    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    rewriteReady = true;
+}
+
+/**
  * Analyzes a portion of page content and displays the result in the sidebar.
  * @param {string} pageData - Content data for analysis.
  */
@@ -168,7 +193,7 @@ async function displayBubble(selectedText, type) {
                 <div class="bubble-title">Fact Check</div>
                 <div class="bubble-content">${formatTextResponse(content)}</div>
                 <footer class="bubble-footer">
-                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
                 </footer>
             `;
         };
@@ -192,7 +217,7 @@ async function displayBubble(selectedText, type) {
                 <div class="bubble-title">Define</div>
                 <div class="bubble-content">${formatTextResponse(content)}</div>
                 <footer class="bubble-footer">
-                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
                 </footer>
             `;
         };
@@ -229,6 +254,10 @@ async function displayBubble(selectedText, type) {
                     document.getElementById("bubbleText").remove();
                     return;
                 }
+                analyzeButton.remove();
+                document.getElementById("currentCharCount").remove();
+                document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
+                await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
 
                 // Analysis Starts
