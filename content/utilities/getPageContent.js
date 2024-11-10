@@ -24,7 +24,7 @@ export async function getPageContent() {
  * @param {NodeList} mainElements - The list of elements (article, section, etc.) to process.
  * @returns {Array} A list of elements that contain relevant content.
  */
-async function extractContentElements(mainElements) {
+export async function extractContentElements(mainElements) {
     return Array.from(mainElements)
         .filter(element => {
             const className = element.className.toLowerCase();
@@ -48,7 +48,7 @@ async function extractContentElements(mainElements) {
  * @param {Array} mainTemp - The array of elements to filter.
  * @returns {Array} A filtered list of elements that are likely part of the main content.
  */
-async function filterContentElements(mainTemp) {
+export async function filterContentElements(mainTemp) {
     return mainTemp.flatMap(element =>
         Array.from(element.querySelectorAll('p, a, h1, h2, h3, h4, h5, h6, li, blockquote, span, figcaption, em'))
             .filter(childElement => {

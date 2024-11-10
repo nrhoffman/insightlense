@@ -3,7 +3,8 @@ import { define } from './utilities/define.js';
 import { factCheck } from './utilities/factCheck.js';
 import { generateAnalysis } from './utilities/analyze.js';
 import { generateSummary } from './utilities/summarize.js';
-import { getPageContent } from './utilities/getPageContent.js';
+import { generateRewrite } from './utilities/rewrite.js';
+import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
 import { populateBubble } from './bubbles/bubbles.js';
 
@@ -134,8 +135,18 @@ async function rewriteContent(readingLevel) {
     
     const summary = document.getElementById('summary').innerText;
 
-    console.log("REWRITE");
-    await new Promise(r => setTimeout(r, 10000));
+    // Fetch content elements
+    const mainElements = document.querySelectorAll('article, main, section, div');
+    const mainContentElements = await extractContentElements(mainElements);
+    const contentElements = await filterContentElements(mainContentElements);
+
+    // Filter elements based on content length and word count
+    const validElements = contentElements.filter(element => {
+        const text = element.textContent.trim();
+        return text.length > 0 && text.split(/\s+/).length >= 5;
+    });
+
+    await generateRewrite(validElements, summary, readingLevel);
 
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });
