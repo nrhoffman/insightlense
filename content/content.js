@@ -3,7 +3,8 @@ import { define } from './utilities/define.js';
 import { factCheck } from './utilities/factCheck.js';
 import { generateAnalysis } from './utilities/analyze.js';
 import { generateSummary } from './utilities/summarize.js';
-import { getPageContent } from './utilities/getPageContent.js';
+import { generateRewrite } from './utilities/rewrite.js';
+import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
 import { populateBubble } from './bubbles/bubbles.js';
 
@@ -11,6 +12,7 @@ console.log("Content script loaded");
 let modelInstance = null;
 let modelReady = false;
 let summarizationReady = true;
+let rewriteReady = true;
 let analysisReady = true;
 let initializationReady = false;
 
@@ -24,6 +26,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'summarizeContent':
             summarizeContent(request.focusInput);
+            break;
+        case 'rewriteContent':
+            rewriteContent(request.readingLevel);
             break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
@@ -43,7 +48,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 summarizationStatus: summarizationReady ? "yes" : "no",
                 analysisStatus: analysisReady ? "yes" : "no",
                 initializationStatus: initializationReady ? "yes" : "no",
-                summaryGenStatus: checkSummary() ? "yes" : "no"
+                summaryGenStatus: checkSummary() ? "yes" : "no",
+                rewriteStatus: rewriteReady ? "yes" : "no"
             });
             break;
     }
@@ -118,6 +124,36 @@ async function summarizeContent(focusInput) {
 }
 
 /**
+ * Rewrites the contents on the webpage to have no bias or logical falacies at the desired reading level
+ * @param {string} readingLevel - Desired reading level for the rewrite
+ */
+async function rewriteContent(readingLevel) {
+
+    //Prevents accidental multiple sessions
+    if (!rewriteReady) return;
+    rewriteReady = false;
+    
+    const summary = document.getElementById('summary').innerText;
+
+    // Fetch content elements
+    const mainElements = document.querySelectorAll('article, main, section, div');
+    const mainContentElements = await extractContentElements(mainElements);
+    const contentElements = await filterContentElements(mainContentElements);
+
+    // Filter elements based on content length and word count
+    const validElements = contentElements.filter(element => {
+        const text = element.textContent.trim();
+        return text.length > 0 && text.split(/\s+/).length >= 5;
+    });
+
+    // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when api is working
+
+    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    rewriteReady = true;
+}
+
+/**
  * Analyzes a portion of page content and displays the result in the sidebar.
  * @param {string} pageData - Content data for analysis.
  */
@@ -168,7 +204,7 @@ async function displayBubble(selectedText, type) {
                 <div class="bubble-title">Fact Check</div>
                 <div class="bubble-content">${formatTextResponse(content)}</div>
                 <footer class="bubble-footer">
-                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
                 </footer>
             `;
         };
@@ -192,7 +228,7 @@ async function displayBubble(selectedText, type) {
                 <div class="bubble-title">Define</div>
                 <div class="bubble-content">${formatTextResponse(content)}</div>
                 <footer class="bubble-footer">
-                    <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
                 </footer>
             `;
         };
@@ -229,6 +265,10 @@ async function displayBubble(selectedText, type) {
                     document.getElementById("bubbleText").remove();
                     return;
                 }
+                analyzeButton.remove();
+                document.getElementById("currentCharCount").remove();
+                document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
+                await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
 
                 // Analysis Starts
