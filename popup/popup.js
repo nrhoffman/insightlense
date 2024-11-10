@@ -188,6 +188,7 @@ async function rewriteContent() {
     // Update Summarize and Rewrite Button State
     summarizeButton.disabled = true;
     rewriteButton.disabled = true;
+    rewriteButton.textContent = "Doesn't Currently Work"; // TODO: Remove when rewrite is working
 
     console.log("Sending rewrite message...");
     chrome.tabs.sendMessage(tabs[0].id, {

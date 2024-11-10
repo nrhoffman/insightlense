@@ -146,7 +146,7 @@ async function rewriteContent(readingLevel) {
         return text.length > 0 && text.split(/\s+/).length >= 5;
     });
 
-    await generateRewrite(validElements, summary, readingLevel);
+    // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when api is working
 
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });

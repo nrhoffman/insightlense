@@ -1,9 +1,11 @@
 export async function generateRewrite(elements, summary, readingLevel) {
-    const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.assistant.capabilities();
+    const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
     if (available !== "no") {
+        console.log("Creating");
         const rewriter = await ai.rewriter.create({
-            sharedContext: `Here's the context for the rewriting: "${summary}".`
+            //sharedContext: `Here's the context for the rewriting: "${summary}".`
         });
+        console.log("Created");
         let index = 0;
         // Rewrite content for each valid element and replace the old content immediately
         for (const element of elements) {
