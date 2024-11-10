@@ -7,28 +7,31 @@ import { generateRewrite } from './utilities/rewrite.js';
 import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
 import { populateBubble } from './bubbles/bubbles.js';
+import StatusStateMachine from './utilities/statusStateMachine';
 
 console.log("Content script loaded");
 let modelInstance = null;
-let modelReady = false;
-let summarizationReady = true;
-let rewriteReady = true;
-let analysisReady = true;
-let initializationReady = false;
+const statusState = new StatusStateMachine();
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
         case "initializeModel":
-            initModel();
+            if (!statusState.isRunning("initializing") && !statusState.isInitialized()){
+                initModel();
+            }
         case "showSidebar":
             createSidebar();
             break;
         case 'summarizeContent':
-            summarizeContent(request.focusInput);
+            if (!statusState.isRunning("summarizing")){
+                summarizeContent(request.focusInput);
+            }
             break;
         case 'rewriteContent':
-            rewriteContent(request.readingLevel);
+            if (!statusState.isRunning("rewriting")){
+                rewriteContent(request.readingLevel);
+            }
             break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
@@ -44,12 +47,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'getStatuses':
             sendResponse({
-                modelStatus: modelReady ? "yes" : "no",
-                summarizationStatus: summarizationReady ? "yes" : "no",
-                analysisStatus: analysisReady ? "yes" : "no",
-                initializationStatus: initializationReady ? "yes" : "no",
-                summaryGenStatus: checkSummary() ? "yes" : "no",
-                rewriteStatus: rewriteReady ? "yes" : "no"
+                initialized: statusState.isInitialized() ? "yes" : "no",
+                summarized: statusState.isSummarized() ? "yes" : "no",
+                notRunning: statusState.allNotRunning() ? "yes" : "no" 
             });
             break;
     }
@@ -73,16 +73,17 @@ window.addEventListener('beforeunload', () => {
  * Initializes the chatbot model and sends activation messages for sidebar buttons.
  */
 async function initModel() {
-    initializationReady = true;
-
+    statusState.stateChange("initializing", true);
     // Request page content
     const pageContent = await getPageContent();
 
     // Initialize Chat Bot model
     modelInstance = await initializeModel(modelInstance, pageContent);
+
+    statusState.stateChange("initializing", false);
+    statusState.setInitialized();
     chrome.runtime.sendMessage({ action: "activateSendButton" });
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    modelReady = true;
 }
 
 /**
@@ -90,10 +91,7 @@ async function initModel() {
  * @param {string} focusInput - Optional input to focus the summary on a specific topic.
  */
 async function summarizeContent(focusInput) {
-
-    //Prevents accidental multiple sessions
-    if (!summarizationReady) return;
-    summarizationReady = false;
+    statusState.stateChange("summarizing", true);
     
     const summary = document.getElementById('summary');
     summary.innerHTML = '';
@@ -117,10 +115,14 @@ async function summarizeContent(focusInput) {
 
     updateSummaryContent(combinedSummary);
 
+    statusState.stateChange("summarizing", false);
+
+    // Set to summarized for first summarization
+    if (!statusState.isSummarized()) statusState.setSummarized();
+
     loadingSpinner.remove();
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });
-    summarizationReady = true;
 }
 
 /**
@@ -128,10 +130,7 @@ async function summarizeContent(focusInput) {
  * @param {string} readingLevel - Desired reading level for the rewrite
  */
 async function rewriteContent(readingLevel) {
-
-    //Prevents accidental multiple sessions
-    if (!rewriteReady) return;
-    rewriteReady = false;
+    statusState.stateChange("rewriting", true);
     
     const summary = document.getElementById('summary').innerText;
 
@@ -148,9 +147,10 @@ async function rewriteContent(readingLevel) {
 
     // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when api is working
 
+    statusState.stateChange("rewriting", false);
+
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });
-    rewriteReady = true;
 }
 
 /**
@@ -158,7 +158,8 @@ async function rewriteContent(readingLevel) {
  * @param {string} pageData - Content data for analysis.
  */
 async function analyzeContent(pageData) {
-    analysisReady = false;
+    statusState.stateChange("analyzing", true);
+
     const analysisText = document.getElementById('analysis');
     analysisText.innerHTML = '';
     const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
@@ -179,8 +180,9 @@ async function analyzeContent(pageData) {
     // Final update with the result or final failure message
     updateAnalysisContent(analysis);
 
+    statusState.stateChange("analyzing", false);
+
     loadingSpinner.remove();
-    analysisReady = true;
 }
 
 /**
@@ -342,16 +344,6 @@ function formatTextResponse(response) {
     htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
     htmlData = htmlData.replace(/\n/g, "<br>");
     return htmlData;
-}
-
-/**
- * Checks if a summary has been generated and returns the status.
- * @returns {boolean} - True if a summary is present, false otherwise.
- */
-function checkSummary() {
-    const summary = document.getElementById('summary');
-    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
-            summary.innerText === "");
 }
 
 /**

@@ -110,16 +110,15 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
 
   // Send the message to check on statuses
   const status = await chrome.tabs.sendMessage(tabId, { action: "getStatuses", tabId: tabId });
-  console.log(status);
 
-  // If Initialization isn't running, run it
-  if (status.initializationStatus === "no") {
+  // Run initialization if it isn't already running or finished yet
+  if (status.notRunning === "yes" && status.initialized === "no") {
     // Send the message to initialize model
     chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
   }
 
   // If model is ready, activate chatbot
-  if (status.modelStatus === "yes") {
+  if (status.initialized === "yes") {
     sendButton.disabled = false;
     chatWindow.innerHTML = '';
     outputElement.textContent = "Chatbot: I'm ready for any questions.";
@@ -128,15 +127,13 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     chatWindow.appendChild(outputElement);
   }
 
-  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.modelStatus === "yes" && status.summarizationStatus === "yes" &&
-    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
+  // If model is ready and there isn't a summarization or analysis in progress, activate summary button
+  if (status.notRunning === "yes" && status.initialized === "yes") {
     summarizeButton.disabled = false;
   }
 
-  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.summaryGenStatus === "no" && status.summarizationStatus === "yes" &&
-    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
+  // If model is ready and there isn't a summarization or analysis in progress, activate rewrite button
+  if (status.summarized === "yes" && status.notRunning === "yes") {
     rewriteButton.disabled = false;
     rewriteButton.textContent = "Rewrite";
   }

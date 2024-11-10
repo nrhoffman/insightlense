@@ -30,8 +30,7 @@ export async function populateBubble(type) {
     if (type !== "defineBubble") {
 
         // Display error if summary is empty
-        if (summaryEl.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
-            summaryEl.innerText === "") {
+        if (summaryEmpty()) {
             displayErrorSummary(bubble);
             return "Error";
         } else { 
@@ -114,6 +113,16 @@ function makeBubbleDraggable(bubble) {
     let isDragging = false;
 
     bubble.addEventListener("mousedown", (e) => bubbleDragging(e, bubble, offsetX, offsetY, isDragging));
+}
+
+/**
+ * Checks if a summary has been generated and returns the status.
+ * @returns {boolean} - True if the summary is empty, false otherwise.
+ */
+function summaryEmpty() {
+    const summary = document.getElementById('summary');
+    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
+            summary.innerText === "");
 }
 
 /**

@@ -54,12 +54,11 @@ export async function initializeModel(modelInstance, pageContent) {
             // If content is within the character limit, initialize the model with the full content
             modelInstance = await ai.languageModel.create({ systemPrompt: getPrompt(pageContent) });
         }
-
-        console.log("Model Initialized...");
     } catch (error) {
         console.error("Error initializing model:", error);
     }
-
+    
+    console.log("Model Initialized...");
     return modelInstance;
 }
 
