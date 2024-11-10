@@ -1,9 +1,9 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
-import { define } from './utilities/define.js';
-import { factCheck } from './utilities/factCheck.js';
-import { generateAnalysis } from './utilities/analyze.js';
-import { generateSummary } from './utilities/summarize.js';
-import { generateRewrite } from './utilities/rewrite.js';
+import { define } from './tools/define.js';
+import { factCheck } from './tools/factCheck.js';
+import { generateAnalysis } from './tools/analyze.js';
+import { generateSummary } from './tools/summarize.js';
+import { generateRewrite } from './tools/rewrite.js';
 import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
 import { initializeModel } from './utilities/initializeModel.js';
 import { populateBubble } from './bubbles/bubbles.js';
