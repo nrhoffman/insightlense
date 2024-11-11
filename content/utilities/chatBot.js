@@ -122,7 +122,7 @@ class ChatBot {
         let result = '';
         let attempt = 0;
 
-        if (this.modelInstance) {
+        if (this.initialized) {
             while (attempt < retries) {
                 try {
                     result = await this.modelInstance.prompt(input);
