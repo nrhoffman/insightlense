@@ -1,19 +1,11 @@
 // Function that fetches the web page content by selecting relevant elements and processing them.
 export async function getPageContent() {
-    // Select common elements that might contain the main content of the page
     let mainElements = document.querySelectorAll('article, main, section, div');
-
-    // Extract content from the selected main elements, filtering out non-relevant ones
     const mainTemp = await extractContentElements(mainElements);
-
-    // Further filter the extracted elements to focus only on meaningful content
     const contentTemp = await filterContentElements(mainTemp);
-
-    // Clean the content text by removing unnecessary spaces and line breaks
     const contentClean = await cleanContentText(contentTemp);
-
-    // Remove any duplicate content and join the cleaned text into a single string
     const uniqueContent = Array.from(new Set(contentClean)).join('\n');
+    
     return uniqueContent;
 }
 
