@@ -164,6 +164,7 @@ async function displayBubble(selectedText, type) {
         updateBubbleContent(result, "Define");
     } else if (type === "analysisBubble") {
         const analyzeButton = document.getElementById('analyzeButton');
+        const analyzeBubble = document.getElementById(type);
         if (!analyzeButton._listenerAdded) {
             analyzeButton.addEventListener('click', async () => {
                 const filteredText = selectedText.split('\n')
@@ -176,8 +177,10 @@ async function displayBubble(selectedText, type) {
                 }
 
                 analyzeButton.remove();
-                document.getElementById("bubbleText").innerText = "Analysis will go to sidebar.";
+                document.getElementById("currentCharCount").remove();
+                document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
                 await new Promise(r => setTimeout(r, 3000));
+                analyzeBubble.remove();
                 analyzeContent(filteredText);
             });
             analyzeButton._listenerAdded = true;
