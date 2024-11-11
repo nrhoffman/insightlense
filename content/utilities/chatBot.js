@@ -1,6 +1,3 @@
-/**
- * Class that manages the chatbot model and its interaction with page content.
- */
 class ChatBot {
     constructor() {
         this.initialized = false; // Indicates if the model has been initialized
@@ -13,7 +10,7 @@ class ChatBot {
      * @returns {boolean} - True if initialized, false otherwise.
      */
     isInitialized() {
-        return this.initialized === true;
+        return this.initialized;
     }
 
     /**
@@ -21,7 +18,7 @@ class ChatBot {
      * @returns {boolean} - True if initializing, false otherwise.
      */
     isInitializing() {
-        return this.initializing === true;
+        return this.initializing;
     }
 
     /**
@@ -30,6 +27,11 @@ class ChatBot {
      * @param {string} pageContent - The content of the page to initialize the model with.
      */
     async initializeModel(pageContent) {
+        if (this.initializing) {
+            console.warn("Model is already initializing. Please wait.");
+            return;
+        }
+
         try {
             this.initializing = true;
             console.log("Initializing model...");
@@ -64,11 +66,11 @@ class ChatBot {
             }
         } catch (error) {
             console.error("Error initializing model:", error);
+        } finally {
+            this.initialized = true;
+            this.initializing = false;
+            console.log("Model Initialized...");
         }
-
-        this.initialized = true;
-        this.initializing = false;
-        console.log("Model Initialized...");
     }
 
     /**
@@ -79,20 +81,20 @@ class ChatBot {
      */
     async initializeModelSection(curEl, retries = 6, delay = 1000) {
         let attempt = 0;
-        
+
         while (attempt < retries) {
             try {
                 await this.modelInstance.prompt(this.getPrompt(curEl));
                 break;
             } catch (error) {
-                console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
+                console.error(`Error initializing content on attempt ${attempt + 1}:`, error);
                 attempt++;
                 if (attempt < retries) {
                     console.log(`Retrying in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
+                    delay *= 2; // Exponential backoff
                 } else {
-                    console.log("Max retries reached. Returning empty result.");
+                    console.error("Max retries reached. Model section initialization failed.");
                 }
             }
         }
@@ -126,17 +128,21 @@ class ChatBot {
                     result = await this.modelInstance.prompt(input);
                     return result;
                 } catch (error) {
-                    console.log(`Error retrieving output on attempt ${attempt + 1}:`, error);
+                    console.error(`Error retrieving output on attempt ${attempt + 1}:`, error);
                     attempt++;
                     if (attempt < retries) {
                         console.log(`Retrying in ${delay}ms...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2;
+                        delay *= 2; // Exponential backoff
                     } else {
-                        console.log("Max retries reached. Returning empty result.");
+                        console.error("Max retries reached. Returning empty result.");
+                        return "I'm sorry, I couldn't process that request.";
                     }
                 }
             }
+        } else {
+            console.error("Model not initialized.");
+            return "The model is not yet initialized.";
         }
     }
 
@@ -144,7 +150,13 @@ class ChatBot {
      * Destroys the model instance to release resources.
      */
     destroyModel() {
-        if (this.modelInstance) this.modelInstance.destroy();
+        if (this.modelInstance) {
+            console.log("Destroying model instance...");
+            this.modelInstance.destroy();
+            this.modelInstance = null;
+        } else {
+            console.warn("Model instance not found.");
+        }
     }
 }
 

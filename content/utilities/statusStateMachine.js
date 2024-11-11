@@ -25,7 +25,11 @@ class StatusStateMachine {
      * @returns {boolean} - True if the task is running, false otherwise.
      */
     isRunning(stateName) {
-        return this.states[stateName] === true;
+        if (!this.states.hasOwnProperty(stateName)) {
+            console.error(`Invalid state name: ${stateName}. Available states: summarizing, rewriting, analyzing.`);
+            return false;  // Defaulting to false if state name is invalid
+        }
+        return this.states[stateName];
     }
 
     /**
@@ -41,6 +45,7 @@ class StatusStateMachine {
      */
     setSummarized() {
         this.summarized = true;
+        console.log("Content marked as summarized.");
     }
 
     /**
@@ -49,19 +54,39 @@ class StatusStateMachine {
      * @param {boolean} value - The new state for the task (true for running, false for not running).
      */
     stateChange(type, value) {
-        switch (type) {
-            case 'summarizing':
-                this.states["summarizing"] = value;
-                break;
-            case 'rewriting':
-                this.states["rewriting"] = value;
-                break;
-            case 'analyzing':
-                this.states["analyzing"] = value;
-                break;
-            default:
-                console.error(`Unknown transition type: ${type}`);
+        if (!this.states.hasOwnProperty(type)) {
+            console.error(`Invalid task type: ${type}. Available types: summarizing, rewriting, analyzing.`);
+            return;
         }
+
+        if (this.states[type] === value) {
+            console.log(`State for "${type}" is already set to ${value}. No change needed.`);
+            return;
+        }
+
+        this.states[type] = value;
+
+        if (value) {
+            console.log(`Task "${type}" started.`);
+        } else {
+            console.log(`Task "${type}" finished.`);
+        }
+
+        // Log the current state of all tasks
+        console.log(`Current States: summarizing=${this.states.summarizing}, rewriting=${this.states.rewriting}, analyzing=${this.states.analyzing}`);
+    }
+
+    /**
+     * Resets all states to their initial values (not running).
+     */
+    resetStates() {
+        this.states = {
+            summarizing: false,
+            rewriting: false,
+            analyzing: false
+        };
+        this.summarized = false;
+        console.log("All states have been reset.");
     }
 }
 

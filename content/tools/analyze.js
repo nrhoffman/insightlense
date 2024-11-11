@@ -9,65 +9,89 @@
  * @returns {Promise<string>} - The definition of the selected text or an error message if the operation fails.
  */
 export async function generateAnalysis(selectedText, onErrorUpdate, retries = 6, delay = 1000) {
-    let result = '';
     let attempt = 0;
     let session = null;
-
-    // Fetch the content of the summary element to use as context for fact-checking
     const summary = document.getElementById('summary').textContent;
 
-    // Retry logic: Try initializing the model up to the specified number of retries
     while (attempt < retries) {
         try {
-            
-            // Check availability of model
+            // Ensure the model is available before creating a session
             const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-            if (available !== "no") {
-
-                // Create model
-                if(!session){
-                    session = await ai.languageModel.create({
-                        systemPrompt: getAnalysisPrompt(summary) 
-                    });
-                }
-
-                // Prompt the model
-                result = await session.prompt(`Analyze: "${selectedText}"`);
-                session.destroy();
-                break;
+            if (available === "no") {
+                return "Error: Model unavailable. Please restart the browser.";
             }
-            else {
-                return "Error: Model Crashed... Restart browser."
+
+            // Create session if it doesn't exist
+            if (!session) {
+                session = await createSession(summary);
             }
+
+            // Prompt the model for analysis
+            const result = await analyzeText(session, selectedText);
+            session.destroy(); // Clean up session after use
+            return result; // Return successful result
         } catch (error) {
-            
-            // Report error immediately to the caller
+            // Immediately report error during retry attempts
             if (onErrorUpdate) {
-                onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}\n`);
+                onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}`);
             }
 
-            console.log(`Error analyzing content on attempt ${attempt + 1}:`, error);
+            // Log error for debugging purposes
+            console.error(`Error on attempt ${attempt + 1}: ${error.message}`);
+
+            // Increment retry attempt and apply exponential backoff
             attempt++;
             if (attempt < retries) {
-
-                // If retries are left, wait for a certain time before trying again
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                delay *= 2;
-            } 
-            else {
-    
-                //Cleanup
-                if (session) session.destroy();
-    
-                // If the maximum number of retries is reached, return a failure message
-                console.log("Max retries reached. Returning empty analysis.");
-                result = "Analysis failed after multiple attempts.";
+                await handleRetry(delay);
+                delay *= 2; // Exponential backoff
+            } else {
+                // Clean up if all retry attempts fail
+                if (session) {
+                    session.destroy();
+                }
+                return "Analysis failed after multiple attempts.";
             }
         }
     }
+}
 
-    return result;
+/**
+ * Creates a new session for the analysis.
+ * @param {string} summary - The summary of the content to provide context to the model.
+ * @returns {Promise<Object>} - The created model session.
+ */
+async function createSession(summary) {
+    try {
+        return await ai.languageModel.create({
+            systemPrompt: getAnalysisPrompt(summary)
+        });
+    } catch (error) {
+        throw new Error(`Failed to create analysis session: ${error.message}`);
+    }
+}
+
+/**
+ * Analyzes the selected text using the provided session.
+ * @param {Object} session - The session to use for prompting the language model.
+ * @param {string} selectedText - The text to be analyzed.
+ * @returns {Promise<string>} - The analysis result.
+ */
+async function analyzeText(session, selectedText) {
+    try {
+        const result = await session.prompt(`Analyze: "${selectedText}"`);
+        return result;
+    } catch (error) {
+        throw new Error(`Error while analyzing text: ${error.message}`);
+    }
+}
+
+/**
+ * Handles retry logic, including applying an exponential backoff delay.
+ * @param {number} delay - The current delay in milliseconds.
+ */
+async function handleRetry(delay) {
+    console.log(`Retrying in ${delay}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
 }
 
 /**

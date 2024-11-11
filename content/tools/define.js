@@ -10,60 +10,55 @@
  * @returns {Promise<string>} - The definition of the selected text or an error message if the operation fails.
  */
 export async function define(selectedText, onErrorUpdate, retries = 6, delay = 1000) {
-    let result = '';
     let attempt = 0;
     let session = null;
+    const systemPrompt = "Give the definition. Keep answers short.";
 
-    // Retry logic: Try initializing the model up to the specified number of retries
     while (attempt < retries) {
         try {
-            
-            // Check availability of model
-            const { available, defaultTemperature, defaultTopK, maxTopK } = await ai.languageModel.capabilities();
-            if (available !== "no") {
-
-                // Create model
-                if(!session){
-                    session = await ai.languageModel.create({
-                        systemPrompt: "Give the definition. Keep answers short."
-                    });
-                }
-
-                // Prompt the model
-                result = await session.prompt(`Define: "${selectedText}"`);
-                session.destroy();
-                break;
+            // Ensure the model is available before creating a session
+            const { available } = await ai.languageModel.capabilities();
+            if (available === "no") {
+                return "Error: Model unavailable. Please restart the browser.";
             }
-            else {
-                return "Error: Model Crashed... Restart browser."
+
+            // Create session if it doesn't exist
+            if (!session) {
+                session = await ai.languageModel.create({ systemPrompt });
             }
+
+            // Prompt the model for definition
+            const result = await session.prompt(`Define: "${selectedText}"`);
+            session.destroy(); // Clean up session after use
+            return result; // Return successful result
         } catch (error) {
-
-            // Report error immediately to the caller
+            // Immediately report error during retry attempts
             if (onErrorUpdate) {
-                onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}\n`);
+                onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}`);
             }
 
-            console.log(`Error defining content on attempt ${attempt + 1}:`, error);
+            // Log error for debugging purposes
+            console.error(`Error defining content on attempt ${attempt + 1}:`, error);
+
+            // Increment retry attempt and apply exponential backoff
             attempt++;
             if (attempt < retries) {
-
-                // If retries are left, wait for a certain time before trying again
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                delay *= 2;
-            } 
-            else {
-    
-                //Cleanup
+                await handleRetry(delay);
+                delay *= 2; // Exponential backoff
+            } else {
+                // Clean up if all retry attempts fail
                 if (session) session.destroy();
-    
-                // If the maximum number of retries is reached, return a failure message
-                console.log("Max retries reached. Returning empty definition.");
-                result = "Defining failed after multiple attempts.";
+                return "Defining failed after multiple attempts.";
             }
         }
     }
+}
 
-    return result;
+/**
+ * Handles retry logic, including applying an exponential backoff delay.
+ * @param {number} delay - The current delay in milliseconds.
+ */
+async function handleRetry(delay) {
+    console.log(`Retrying in ${delay}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
 }
