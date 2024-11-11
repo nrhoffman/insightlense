@@ -5,13 +5,12 @@ const sendButton = document.getElementById('sendButton');
 const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
 const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
-const outputElement = document.createElement('p');
+const userInput = document.getElementById('chatInput');
 
 /**
  * Message listener function to handle sidebar communication with the content script.
  */
 const onMessageListener = (request, sender, sendResponse) => {
-    outputElement.className = 'bot-p';
 
     switch (request.action) {
         case "activateSummaryButton":
@@ -36,17 +35,30 @@ const onMessageListener = (request, sender, sendResponse) => {
 function activateSendButton() {
     sendButton.disabled = false;
     chatWindow.innerHTML = '';
-    outputElement.textContent = "Chatbot: I'm ready for any questions.";
-    chatWindow.appendChild(outputElement);
+
+    // Create a chatbot message bubble
+    const botMessage = document.createElement('div');
+    botMessage.className = 'bot-message';
+    botMessage.textContent = "I'm ready for any questions.";
+    chatWindow.appendChild(botMessage);
 }
 
 /**
  * Updates the chat window with chatbot output and scrolls to the bottom.
+ * @param {string} output - The chatbot's response text.
  */
 function setChatBotOutput(output) {
+    
+    // Re-enable the send button
     sendButton.disabled = false;
-    outputElement.innerHTML = `Chatbot: ${output}`;
-    chatWindow.appendChild(outputElement);
+
+    // Create a chatbot message bubble for the output
+    const botMessage = document.createElement('div');
+    botMessage.className = 'bot-message';
+    botMessage.innerHTML = output;
+
+    // Append the bot message to the chat window and scroll to the bottom
+    chatWindow.appendChild(botMessage);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
@@ -117,14 +129,9 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
 });
 
 /**
- * Injects the required scripts and CSS into the active tab.
+ * Injects the CSS into the active tab.
  */
 async function injectScripts(tabId) {
-    await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ["./dist/content.bundle.js"]
-    });
-
     await chrome.scripting.insertCSS({
         target: { tabId: tabId },
         files: ["./content/sidebar/sidebar.css"]
@@ -145,10 +152,7 @@ async function checkStatus(tabId) {
  */
 function updateButtonStates(status) {
     if (status.initialized === "yes") {
-        sendButton.disabled = false;
-        chatWindow.innerHTML = '';
-        outputElement.textContent = "Chatbot: I'm ready for any questions.";
-        chatWindow.appendChild(outputElement);
+        activateSendButton();
     }
 
     if (status.notRunning === "yes" && status.initialized === "yes") {
@@ -217,25 +221,24 @@ function getSelectedReadingLevel() {
  * Handles the send button click event, sends user input to the chatbot.
  */
 async function sendChatMessage() {
+    const input = userInput.value.trim();
+    if (!input) return; // Prevent empty messages from being sent
+
+    // Clear the input field and disable the send button
+    userInput.value = '';
+    sendButton.disabled = true;
+
+    // Create and append user message bubble to chat window
+    const userMessage = document.createElement('div');
+    userMessage.className = 'user-message';
+    userMessage.textContent = input;
+    chatWindow.appendChild(userMessage);
+
+    // Scroll to the bottom of the chat window
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    // Send the input message to the background script or content script for chatbot processing
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-        const userInput = document.getElementById('chatInput');
-        const chatWindow = document.getElementById('chatWindow');
-        const input = userInput.value;
-        userInput.value = '';
-
-        // Disable send button while waiting for response
-        sendButton.disabled = true;
-
-        // Create and append user input element to chat window
-        const inputElement = document.createElement('p');
-        inputElement.className = 'user-p';
-        inputElement.textContent = `User: ${input}`;
-        chatWindow.appendChild(inputElement);
-
-        // Scroll to the bottom of the chat window
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-
-        // Send input message to chatbot
         chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
     });
 }

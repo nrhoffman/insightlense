@@ -2,6 +2,7 @@ class ChatBot {
     constructor() {
         this.initialized = false; // Indicates if the model has been initialized
         this.initializing = false; // Indicates if the model is currently initializing
+        this.responding = false;
         this.modelInstance = null; // Holds the instance of the language model
     }
 
@@ -19,6 +20,14 @@ class ChatBot {
      */
     isInitializing() {
         return this.initializing;
+    }
+
+    /**
+     * Checks if the model is currently initializing.
+     * @returns {boolean} - True if initializing, false otherwise.
+     */
+    isResponding() {
+        return this.responding;
     }
 
     /**
@@ -119,6 +128,7 @@ class ChatBot {
      * @returns {string} - The chatbot's output.
      */
     async getChatBotOutput(input, retries = 10, delay = 1000) {
+        this.responding = true;
         let result = '';
         let attempt = 0;
 
@@ -126,6 +136,7 @@ class ChatBot {
             while (attempt < retries) {
                 try {
                     result = await this.modelInstance.prompt(input);
+                    this.responding = false;
                     return result;
                 } catch (error) {
                     console.error(`Error retrieving output on attempt ${attempt + 1}:`, error);
@@ -136,12 +147,14 @@ class ChatBot {
                         delay *= 2; // Exponential backoff
                     } else {
                         console.error("Max retries reached. Returning empty result.");
+                        this.responding = false;
                         return "I'm sorry, I couldn't process that request.";
                     }
                 }
             }
         } else {
             console.error("Model not initialized.");
+            this.responding = false;
             return "The model is not yet initialized.";
         }
     }

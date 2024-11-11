@@ -42,17 +42,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 /**
- * Injects required scripts and styles into the current tab.
+ * Injects required styles into the current tab.
  * 
- * @param {number} tabId - The ID of the active tab where scripts and styles need to be injected.
+ * @param {number} tabId - The ID of the active tab where styles need to be injected.
  */
 async function injectScriptsAndStyles(tabId) {
     try {
-        await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ["./dist/content.bundle.js"]
-        });
-
         await chrome.scripting.insertCSS({
             target: { tabId: tabId },
             files: ["./content/bubbles/bubbles.css"]

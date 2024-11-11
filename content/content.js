@@ -252,7 +252,9 @@ function getCurrentStatuses() {
     return {
         initialized: chatBot.isInitialized() ? "yes" : "no",
         summarized: statusState.isSummarized() ? "yes" : "no",
-        notRunning: (statusState.allNotRunning() && !chatBot.isInitializing()) ? "yes" : "no"
+        notRunning: (statusState.allNotRunning() &&
+                    !chatBot.isInitializing() &&
+                    !chatBot.isResponding()) ? "yes" : "no"
     };
 }
 
