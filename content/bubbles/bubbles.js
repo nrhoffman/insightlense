@@ -4,73 +4,125 @@
  * The bubble is positioned near the selected text and draggable. It can be closed by double-clicking.
  * 
  * @param {string} type - The type of bubble to display (e.g., 'factCheckBubble', 'defineBubble', 'analysisBubble').
+ * @returns {string} - Returns "Pass" if everything is good, "Error" if any validation fails.
  */
 export async function populateBubble(type) {
     let bubble = document.querySelector(`.${type}`);
     if (!bubble) {
-        bubble = document.createElement("div");
-        bubble.id = `${type}`;
-        bubble.classList.add(`${type}`);
-        document.body.appendChild(bubble);
+        bubble = createBubble(type);
     }
 
-    // Get selection position to place bubble
     const selection = window.getSelection();
     const selectedText = selection.toString();
     const range = selection.getRangeAt(0).getBoundingClientRect();
-    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
-    bubble.style.left = `${window.scrollX + range.left}px`;
 
-    const summaryEl = document.getElementById('summary');
+    positionBubble(bubble, range);
 
-    // Close bubble on double-click and make it draggable
     bubble.addEventListener("dblclick", () => bubble.remove(), { once: true });
     makeBubbleDraggable(bubble);
 
-    if (type !== "defineBubble") {
-
-        // Display error if summary is empty
-        if (summaryEl.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
-            summaryEl.innerText === "") {
-            displayErrorSummary(bubble);
-            return "Error";
-        } else { 
-            bubble.style.color = '#ffffff'; 
-        }
-    }
-    else{
-
-        // Display error message if more than 100 characters selected for definition
-        if (selectedText.length > 100) {
-            displayErrorDefine(bubble);
-            return "Error";
-        } else { 
-            bubble.style.color = '#ffffff'; 
-        }
+    // Error handling for different bubble types
+    if (type !== "defineBubble" && summaryEmpty()) {
+        displayError(bubble, "summary");
+        return "Error";
     }
 
-    if (type === "factCheckBubble") {
-        
-        // Display error message if more than 1000 characters for fact check
-        if (selectedText.length > 1000) {
-            displayErrorFactCheck(bubble);
-            return "Error";
-        } else { 
-            bubble.style.color = '#ffffff'; 
-        }
+    if (type === "defineBubble" && selectedText.length > 100) {
+        displayError(bubble, "define");
+        return "Error";
+    }
+
+    if (type === "factCheckBubble" && selectedText.length > 1000) {
+        displayError(bubble, "factCheck");
+        return "Error";
     }
 
     // Populate bubble content based on type
-    if (type === 'factCheckBubble') { fillInFactCheckBubble(bubble); }
-    else if (type === 'defineBubble') { fillInDefineBubble(bubble); }
-    else if (type === 'analysisBubble') { fillInAnalysisBubble(bubble); }
+    switch (type) {
+        case 'factCheckBubble':
+            fillInFactCheckBubble(bubble);
+            break;
+        case 'defineBubble':
+            fillInDefineBubble(bubble);
+            break;
+        case 'analysisBubble':
+            fillInAnalysisBubble(bubble);
+            break;
+    }
 
     return "Pass";
 }
 
 /**
+ * Creates a bubble element and appends it to the body.
+ * 
+ * @param {string} type - The type of bubble (e.g., 'factCheckBubble').
+ * @returns {HTMLElement} - The newly created bubble element.
+ */
+function createBubble(type) {
+    let bubble = document.createElement("div");
+    bubble.id = `${type}`;
+    bubble.classList.add(`${type}`);
+    document.body.appendChild(bubble);
+    return bubble;
+}
+
+/**
+ * Positions the bubble near the selected text.
+ * 
+ * @param {HTMLElement} bubble - The bubble element to position.
+ * @param {DOMRect} range - The bounding rectangle of the selected text.
+ */
+function positionBubble(bubble, range) {
+    bubble.style.top = `${window.scrollY + range.top - bubble.offsetHeight - 8}px`;
+    bubble.style.left = `${window.scrollX + range.left}px`;
+}
+
+/**
+ * Displays an error message in the bubble based on the error type.
+ * 
+ * @param {HTMLElement} bubble - The bubble element where the error message will be displayed.
+ * @param {string} type - The type of error (e.g., 'summary', 'define', 'factCheck').
+ */
+function displayError(bubble, type) {
+    bubble.style.color = 'red';
+
+    let message = "";
+    switch (type) {
+        case "summary":
+            message = "Wait until summary generation completes.";
+            break;
+        case "define":
+            message = "Intention for define is for words and phrases less than 100 characters.";
+            break;
+        case "factCheck":
+            message = "Intention for fact check is to fact check bodies of text less than 1000 characters.";
+            break;
+    }
+
+    bubble.innerHTML = `
+        <div class="bubble-title">Error</div>
+        <div class="bubble-content">${message}</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
+        </footer>
+    `;
+}
+
+/**
+ * Makes a given bubble element draggable by adding mouse event listeners.
+ * 
+ * @param {HTMLElement} bubble - The bubble element to make draggable.
+ */
+function makeBubbleDraggable(bubble) {
+    let offsetX, offsetY;
+    let isDragging = false;
+
+    bubble.addEventListener("mousedown", (e) => bubbleDragging(e, bubble, offsetX, offsetY, isDragging));
+}
+
+/**
  * Manages the dragging functionality of a bubble element.
- * Calculates the position offset and updates bubble position on mouse move.
  * 
  * @param {MouseEvent} e - The mouse down event.
  * @param {HTMLElement} bubble - The bubble element to be dragged.
@@ -82,13 +134,11 @@ function bubbleDragging(e, bubble, offsetX, offsetY, isDragging) {
     e.preventDefault();
     isDragging = true;
 
-    // Calculate the offset for dragging
     offsetX = e.clientX - bubble.getBoundingClientRect().left;
     offsetY = e.clientY - bubble.getBoundingClientRect().top;
 
     const onMouseMove = (e) => {
         if (isDragging) {
-            // Update bubble position based on mouse movement
             bubble.style.left = `${e.pageX - offsetX}px`;
             bubble.style.top = `${e.pageY - offsetY}px`;
         }
@@ -105,66 +155,13 @@ function bubbleDragging(e, bubble, offsetX, offsetY, isDragging) {
 }
 
 /**
- * Makes a given bubble element draggable by adding mouse event listeners.
- * 
- * @param {HTMLElement} bubble - The bubble element to make draggable.
+ * Checks if a summary has been generated and returns the status.
+ * @returns {boolean} - True if the summary is empty, false otherwise.
  */
-function makeBubbleDraggable(bubble) {
-    let offsetX, offsetY;
-    let isDragging = false;
-
-    bubble.addEventListener("mousedown", (e) => bubbleDragging(e, bubble, offsetX, offsetY, isDragging));
-}
-
-/**
- * Displays an error message in a bubble when a summary is not available.
- * Sets the bubble text to inform the user to wait until summary generation is complete.
- * 
- * @param {HTMLElement} bubble - The bubble element in which to display the error message.
- */
-function displayErrorSummary(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Error</div>
-    <div class="bubble-content">Wait until summary generation completes.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-    </footer>
-    `;
-}
-
-/**
- * Displays an error message in the define bubble when selected characters is more than 100.
- * Sets the bubble text to inform the user to select less than 100 characters.
- * 
- * @param {HTMLElement} bubble - The bubble element in which to display the error message.
- */
-function displayErrorDefine(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Error</div>
-    <div class="bubble-content">Intention for define is for words and phrases less than 100 characters.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-    </footer>
-    `;
-}
-
-/**
- * Displays an error message in the fact check bubble when selected characters is more than 1000.
- * Sets the bubble text to inform the user to select less than 1000 characters.
- * 
- * @param {HTMLElement} bubble - The bubble element in which to display the error message.
- */
-function displayErrorFactCheck(bubble) {
-    bubble.style.color = 'red';
-    bubble.innerHTML = `
-    <div class="bubble-title">Error</div>
-    <div class="bubble-content">Intention for fact check is to fact check bodies of text less than 1000 characters.</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-    </footer>
-    `;
+function summaryEmpty() {
+    const summary = document.getElementById('summary');
+    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
+            summary.innerText === "");
 }
 
 /**
@@ -175,11 +172,11 @@ function displayErrorFactCheck(bubble) {
  */
 function fillInFactCheckBubble(bubble) {
     bubble.innerHTML = `
-    <div class="bubble-title">Fact Checker</div>
-    <div class="bubble-content">Checking facts...</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
+        <div class="bubble-title">Fact Checker</div>
+        <div class="bubble-content">Checking facts...</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
     `;
 }
 
@@ -191,11 +188,11 @@ function fillInFactCheckBubble(bubble) {
  */
 function fillInDefineBubble(bubble) {
     bubble.innerHTML = `
-    <div class="bubble-title">Define</div>
-    <div class="bubble-content">Fetching definition...</div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
+        <div class="bubble-title">Define</div>
+        <div class="bubble-content">Fetching definition...</div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
     `;
 }
 
@@ -206,16 +203,15 @@ function fillInDefineBubble(bubble) {
  * @param {HTMLElement} bubble - The bubble element to populate with analysis content.
  */
 function fillInAnalysisBubble(bubble) {
-    bubble.innerHTML = '';
     bubble.innerHTML = `
-    <div class="bubble-title">Analyze</div>
-    <div class="bubble-content">
-        <div id="bubbleText">Max Character Count: 4000</div>
-        <div id="currentCharCount">Current Characters Selected: 0</div>
-        <button id="analyzeButton">Analyze</button>
-    </div>
-    <footer class="bubble-footer">
-        <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
-    </footer>
+        <div class="bubble-title">Analyze</div>
+        <div class="bubble-content">
+            <div id="bubbleText">Max Character Count: 4000</div>
+            <div id="currentCharCount">Current Characters Selected: 0</div>
+            <button id="analyzeButton">Analyze</button>
+        </div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
     `;
 }

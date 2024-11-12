@@ -1,229 +1,291 @@
-let listenersInitialized = false;  // Flag to check if listeners are initialized
+let listenersInitialized = false;
+let typingInterval = null;
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
 const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
 const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
-const outputElement = document.createElement('p');
+const userInput = document.getElementById('chatInput');
 
 /**
- * Listener function for messages from the sidebar. This processes specific actions 
- * from the sidebar, enabling/disabling buttons and updating the chat window.
- *
- * @param {Object} request - Contains the action type and any data sent from the sidebar.
- * @param {Object} sender - Information about the sender of the message.
- * @param {function} sendResponse - Function to send a response back to the sender.
+ * Message listener function to handle sidebar communication with the content script.
  */
 const onMessageListener = (request, sender, sendResponse) => {
-  outputElement.className = 'bot-p';
 
-  switch (request.action) {
-    case "activateSummaryButton":
-      summarizeButton.disabled = false;
-      break;
-    case "activateRewriteButton":
-      rewriteButton.disabled = false;
-      rewriteButton.textContent = "Rewrite";
-      break;
-    case "activateSendButton":
-      sendButton.disabled = false;
-      chatWindow.innerHTML = '';
-      outputElement.textContent = "Chatbot: I'm ready for any questions.";
-
-      // Append the new output element to the chat window
-      chatWindow.appendChild(outputElement);
-      break;
-    case "setChatBotOutput":
-      sendButton.disabled = false;
-      outputElement.innerHTML = `Chatbot: ${request.output}`;
-
-      // Append the new output element to the chat window
-      chatWindow.appendChild(outputElement);
-
-      // Scroll to the bottom of the chat window
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-      break;
-  }
+    switch (request.action) {
+        case "activateSummaryButton":
+            summarizeButton.disabled = false;
+            break;
+        case "activateRewriteButton":
+            rewriteButton.disabled = false;
+            rewriteButton.textContent = "Rewrite";
+            break;
+        case "activateSendButton":
+            activateSendButton();
+            break;
+        case "setChatBotOutput":
+            setChatBotOutput(request.output);
+            break;
+    }
 };
 
 /**
- * Initializes message and button click listeners if they have not been initialized yet.
- * Ensures that listeners are only attached once to avoid duplicate actions.
+ * Activate the send button and display initial message.
  */
-function initializeListeners() {
-  if (!listenersInitialized) {
-    chrome.runtime.onMessage.addListener(onMessageListener);
-    listenersInitialized = true;
+function activateSendButton() {
+    sendButton.disabled = false;
+    chatWindow.innerHTML = '';
 
-    // Attach button listeners for summarize and send buttons
-    summarizeButton.addEventListener('click', summarizeContent);
-    rewriteButton.addEventListener('click', rewriteContent);
-    sendButton.addEventListener('click', sendChatMessage);
-  }
+    // Create a chatbot message bubble
+    const botMessage = document.createElement('div');
+    botMessage.className = 'bot-message';
+    botMessage.textContent = "I'm ready for any questions.";
+    chatWindow.appendChild(botMessage);
 }
 
 /**
- * Removes message and button click listeners to prevent memory leaks.
- * Ensures that listeners are detached when the popup closes.
+ * Updates the chat window with chatbot output and scrolls to the bottom.
+ * @param {string} output - The chatbot's response text.
  */
-function removeListeners() {
-  if (listenersInitialized) {
-    chrome.runtime.onMessage.removeListener(onMessageListener);
-    summarizeButton.removeEventListener('click', summarizeContent);
-    rewriteButton.removeEventListener('click', rewriteContent);
-    sendButton.removeEventListener('click', sendChatMessage);
-    listenersInitialized = false;
-  }
+function setChatBotOutput(output) {
+    
+    // Re-enable the send button
+    sendButton.disabled = false;
+
+    // Stop the typing indicator animation
+    clearTypingIndicatorAnimation();
+
+    // Remove typing indicator from chat window
+    const typingIndicator = chatWindow.querySelector('.typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
+
+    // Create a chatbot message bubble for the output
+    const botMessage = document.createElement('div');
+    botMessage.className = 'bot-message';
+    botMessage.innerHTML = output;
+
+    // Append the bot message to the chat window and scroll to the bottom
+    chatWindow.appendChild(botMessage);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// Ensure listeners are cleaned up when the popup closes (or window is removed)
+/**
+ * Initializes the message listeners and button event listeners only once.
+ */
+function initializeListeners() {
+    if (!listenersInitialized) {
+        chrome.runtime.onMessage.addListener(onMessageListener);
+        listenersInitialized = true;
+
+        // Attach button event listeners
+        summarizeButton.addEventListener('click', summarizeContent);
+        rewriteButton.addEventListener('click', rewriteContent);
+        sendButton.addEventListener('click', sendChatMessage);
+    }
+}
+
+/**
+ * Remove all message and button listeners to prevent memory leaks.
+ */
+function removeListeners() {
+    if (listenersInitialized) {
+        chrome.runtime.onMessage.removeListener(onMessageListener);
+        summarizeButton.removeEventListener('click', summarizeContent);
+        rewriteButton.removeEventListener('click', rewriteContent);
+        sendButton.removeEventListener('click', sendChatMessage);
+        listenersInitialized = false;
+    }
+}
+
+/**
+ * Ensure listeners are removed when the popup window is closed.
+ */
 chrome.windows.onRemoved.addListener(removeListeners);
 
-// Run when popup is opened
+/**
+ * Runs when the popup window is opened and initializes content and message listeners.
+ */
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-  const tabId = tabs[0].id;
+    const tabId = tabs[0].id;
 
-
-  // Ensure only one checkbox is selected at a time
-  checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', function () {
-      checkboxes.forEach(cb => {
-        if (cb !== this) cb.checked = false;
-      });
+    // Ensure only one checkbox is selected at a time
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            checkboxes.forEach(cb => {
+                if (cb !== this) cb.checked = false;
+            });
+        });
     });
-  });
 
-  // Inject script and CSS once when popup opens
-  await chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    files: ["./dist/content.bundle.js"]
-  });
+    // Inject necessary scripts and CSS when the popup opens
+    await injectScripts(tabId);
 
-  await chrome.scripting.insertCSS({
-    target: { tabId: tabId },
-    files: ["./content/sidebar/sidebar.css"]
-  });
+    // Send message to check status and initialize model if needed
+    const status = await checkStatus(tabId);
 
-  // Send the message to show sidebar after script injection
-  chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
+    // Initialize listeners if the model isn't running or initialized
+    if (status.notRunning === "yes" && status.initialized === "no") {
+        chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
+    }
 
-  // Send the message to check on statuses
-  const status = await chrome.tabs.sendMessage(tabId, { action: "getStatuses", tabId: tabId });
-  console.log(status);
+    // Update button states based on model status
+    updateButtonStates(status);
 
-  // If Initialization isn't running, run it
-  if (status.initializationStatus === "no") {
-    // Send the message to initialize model
-    chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
-  }
-
-  // If model is ready, activate chatbot
-  if (status.modelStatus === "yes") {
-    sendButton.disabled = false;
-    chatWindow.innerHTML = '';
-    outputElement.textContent = "Chatbot: I'm ready for any questions.";
-
-    // Append the new output element to the chat window
-    chatWindow.appendChild(outputElement);
-  }
-
-  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.modelStatus === "yes" && status.summarizationStatus === "yes" &&
-    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
-    summarizeButton.disabled = false;
-  }
-
-  // If model is ready and there isn't a summarization or analysis in progress, activate summary and analysis buttons
-  if (status.summaryGenStatus === "no" && status.summarizationStatus === "yes" &&
-    status.analysisStatus === "yes" && status.rewriteStatus === "yes") {
-    rewriteButton.disabled = false;
-    rewriteButton.textContent = "Rewrite";
-  }
-
-  // Initialize listeners
-  initializeListeners();
+    // Initialize listeners after setup
+    initializeListeners();
 });
 
 /**
- * Handles the click event for the summarize button. Sends a message to the content
- * script to start summarizing the selected content. Updates the button state to disabled
- * while the summarization is in progress.
+ * Injects the CSS into the active tab.
  */
-async function summarizeContent() {
-  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    const userInput = document.getElementById('userInput');
+async function injectScripts(tabId) {
+    await chrome.scripting.insertCSS({
+        target: { tabId: tabId },
+        files: ["./content/sidebar/sidebar.css"]
+    });
 
-    // Update Summarize Button State
-    summarizeButton.disabled = true;
-    rewriteButton.disabled = true;
-
-    console.log("Sending summarize message...");
-    chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
-  });
+    chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
 }
 
 /**
- * Handles the click event for the rewrite button. Sends a message to the content
- * script to start rewriting content. Updates the button state to disabled
- * while the rewrite is in progress.
+ * Check the current status of the tab to determine which actions to take.
+ */
+async function checkStatus(tabId) {
+    return chrome.tabs.sendMessage(tabId, { action: "getStatuses", tabId: tabId });
+}
+
+/**
+ * Update button states based on the current status of the model.
+ */
+function updateButtonStates(status) {
+    if (status.initialized === "yes") {
+        activateSendButton();
+    }
+
+    if (status.notRunning === "yes" && status.initialized === "yes") {
+        summarizeButton.disabled = false;
+    }
+
+    if (status.summarized === "yes" && status.notRunning === "yes") {
+        rewriteButton.disabled = false;
+        rewriteButton.textContent = "Rewrite";
+    }
+}
+
+/**
+ * Handles the summarize button click event, sends message to summarize content.
+ */
+async function summarizeContent() {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+        const userInput = document.getElementById('userInput');
+
+        // Disable buttons during summarization
+        summarizeButton.disabled = true;
+        rewriteButton.disabled = true;
+
+        console.log("Sending summarize message...");
+        chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
+    });
+}
+
+/**
+ * Handles the rewrite button click event, sends message to rewrite content.
  */
 async function rewriteContent() {
-  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
 
-    // Get the selected reading level from the checkboxes
-    let selectedReadingLevel = '';
+        // Get the selected reading level
+        const selectedReadingLevel = getSelectedReadingLevel();
+
+        // Disable buttons during rewrite
+        summarizeButton.disabled = true;
+        rewriteButton.disabled = true;
+        rewriteButton.textContent = "Doesn't Currently Work";
+
+        console.log("Sending rewrite message...");
+        chrome.tabs.sendMessage(tabs[0].id, {
+            action: "rewriteContent",
+            readingLevel: selectedReadingLevel
+        });
+    });
+}
+
+/**
+ * Returns the selected reading level based on checkbox selection.
+ */
+function getSelectedReadingLevel() {
     const childrenCheckbox = document.getElementById('childrenLevel');
     const collegeCheckbox = document.getElementById('collegeLevel');
     const currentCheckbox = document.getElementById('currentLevel');
 
-    if (childrenCheckbox.checked) {
-      selectedReadingLevel = `a children's reading level`;
-    } else if (collegeCheckbox.checked) {
-      selectedReadingLevel = 'a college reading level';
-    } else if (currentCheckbox.checked) {
-      selectedReadingLevel = `the reading level it's currently at`;
-    }
-
-    // Update Summarize and Rewrite Button State
-    summarizeButton.disabled = true;
-    rewriteButton.disabled = true;
-    rewriteButton.textContent = "Doesn't Currently Work"; // TODO: Remove when rewrite is working
-
-    console.log("Sending rewrite message...");
-    chrome.tabs.sendMessage(tabs[0].id, {
-      action: "rewriteContent",
-      readingLevel: selectedReadingLevel
-    });
-  });
+    if (childrenCheckbox.checked) return `a children's reading level`;
+    if (collegeCheckbox.checked) return 'a college reading level';
+    if (currentCheckbox.checked) return `the reading level it's currently at`;
+    return '';
 }
 
 /**
- * Handles the click event for the send button in the chat window. Sends the user’s input 
- * message to the chatbot for a response. Updates the chat window to display the user’s 
- * message and handles UI scrolling and button state.
+ * Handles the send button click event, sends user input to the chatbot.
  */
 async function sendChatMessage() {
-  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-    const userInput = document.getElementById('chatInput');
-    const chatWindow = document.getElementById('chatWindow');
-    const input = userInput.value;
-    userInput.value = '';
+    const input = userInput.value.trim();
+    if (!input) return; // Prevent empty messages from being sent
 
-    // Update Send Button State
+    // Clear the input field and disable the send button
+    userInput.value = '';
     sendButton.disabled = true;
 
-    // Create a new paragraph element for the input
-    const inputElement = document.createElement('p');
-    inputElement.className = 'user-p';
-    inputElement.textContent = `User: ${input}`;
+    // Create and append user message bubble to chat window
+    const userMessage = document.createElement('div');
+    userMessage.className = 'user-message';
+    userMessage.textContent = input;
+    chatWindow.appendChild(userMessage);
 
-    // Append the new output element to the chat window
-    chatWindow.appendChild(inputElement);
+    // Check if an existing typing indicator exists and remove it
+    const existingTypingIndicator = chatWindow.querySelector('.typing-indicator');
+    if (existingTypingIndicator) existingTypingIndicator.remove();
+
+    // Create and append typing indicator
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'typing-indicator';
+    typingIndicator.textContent = '...'; // Start with a single dot
+    chatWindow.appendChild(typingIndicator);
+
+    // Start the typing animation
+    startTypingIndicatorAnimation(typingIndicator);
 
     // Scroll to the bottom of the chat window
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
-    chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
-  });
+    // Send the input message to the background script or content script for chatbot processing
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+        chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
+    });
+}
+
+/**
+ * Starts an animated typing indicator that cycles between ".", "..", and "..."
+ * to simulate the chatbot "typing" while processing a response.
+ * @param {HTMLElement} typingIndicator - The element displaying the typing animation.
+ */
+function startTypingIndicatorAnimation(typingIndicator) {
+    let dotCount = 1;
+    clearTypingIndicatorAnimation();
+    typingInterval = setInterval(() => {
+        typingIndicator.textContent = '.'.repeat(dotCount); // Update the text to ".", "..", "..."
+        dotCount = (dotCount % 3) + 1; // Cycle dotCount between 1 and 3
+    }, 500); // Update every 500ms
+}
+
+/**
+ * Stops the typing indicator animation by clearing the interval.
+ */
+function clearTypingIndicatorAnimation() {
+    if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = null;
+    }
 }

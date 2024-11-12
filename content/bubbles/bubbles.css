@@ -57,6 +57,7 @@
     transition: background-color 0.3s, transform 0.2s box-shadow 0.3s;
     outline: none;
     margin-top: 10px;
+    text-align: center; 
   }
 
 #analyzeButton:hover {

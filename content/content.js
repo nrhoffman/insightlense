@@ -1,34 +1,33 @@
+import ChatBot from './utilities/chatBot';
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
-import { define } from './utilities/define.js';
-import { factCheck } from './utilities/factCheck.js';
-import { generateAnalysis } from './utilities/analyze.js';
-import { generateSummary } from './utilities/summarize.js';
-import { generateRewrite } from './utilities/rewrite.js';
+import { define } from './tools/define.js';
+import { factCheck } from './tools/factCheck.js';
+import { generateAnalysis } from './tools/analyze.js';
+import { generateSummary } from './tools/summarize.js';
+import { generateRewrite } from './tools/rewrite.js';
 import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
-import { initializeModel } from './utilities/initializeModel.js';
 import { populateBubble } from './bubbles/bubbles.js';
+import StatusStateMachine from './utilities/statusStateMachine';
 
 console.log("Content script loaded");
-let modelInstance = null;
-let modelReady = false;
-let summarizationReady = true;
-let rewriteReady = true;
-let analysisReady = true;
-let initializationReady = false;
+
+const statusState = new StatusStateMachine();
+const chatBot = new ChatBot();
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
         case "initializeModel":
-            initModel();
+            initializeChatBot();
+            break;
         case "showSidebar":
             createSidebar();
             break;
         case 'summarizeContent':
-            summarizeContent(request.focusInput);
+            if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
             break;
         case 'rewriteContent':
-            rewriteContent(request.readingLevel);
+            if (!statusState.isRunning("rewriting")) rewriteContent(request.readingLevel);
             break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
@@ -43,144 +42,96 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             displayBubble(request.selectedText, 'analysisBubble');
             break;
         case 'getStatuses':
-            sendResponse({
-                modelStatus: modelReady ? "yes" : "no",
-                summarizationStatus: summarizationReady ? "yes" : "no",
-                analysisStatus: analysisReady ? "yes" : "no",
-                initializationStatus: initializationReady ? "yes" : "no",
-                summaryGenStatus: checkSummary() ? "yes" : "no",
-                rewriteStatus: rewriteReady ? "yes" : "no"
-            });
+            sendResponse(getCurrentStatuses());
             break;
     }
 });
 
-// Event listeners for updating the character count
+// Event listeners for updating character count
 document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
 
-// Listen for the page unload event to cleanup the model
-window.addEventListener('beforeunload', () => {
-    if (modelInstance) {
-        modelInstance.destroy();
-        console.log("Chat Bot Model Destroyed");
-    }
-    document.removeEventListener("mouseup", updateCharacterCount);
-    document.removeEventListener("keyup", updateCharacterCount);
-});
+// Listen for page unload event to clean up the model
+window.addEventListener('beforeunload', cleanup);
 
 /**
- * Initializes the chatbot model and sends activation messages for sidebar buttons.
+ * Initializes the chatbot model by extracting and processing the page content.
+ * Activates relevant buttons in the sidebar upon successful initialization.
  */
-async function initModel() {
-    initializationReady = true;
-
-    // Request page content
-    const pageContent = await getPageContent();
-
-    // Initialize Chat Bot model
-    modelInstance = await initializeModel(modelInstance, pageContent);
-    chrome.runtime.sendMessage({ action: "activateSendButton" });
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    modelReady = true;
+async function initializeChatBot() {
+    if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
+        const pageContent = await getPageContent();
+        await chatBot.initializeModel(pageContent);
+        chrome.runtime.sendMessage({ action: "activateSendButton" });
+        chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+    }
 }
 
 /**
- * Generates a summary for the current page content and updates the sidebar.
- * @param {string} focusInput - Optional input to focus the summary on a specific topic.
+ * Retrieves and processes output from the chatbot model based on user input.
+ * Displays the model's response in the sidebar.
+ * @param {string} input - The user input to send to the chatbot.
+ */
+async function getChatBotOutput(input) {
+    let result = await chatBot.getChatBotOutput(input);
+    chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
+}
+
+/**
+ * Generates a summary of the page content and displays it in the sidebar.
+ * Optionally focuses the summary on a specific topic if provided.
+ * @param {string} focusInput - Optional focus for the summary.
  */
 async function summarizeContent(focusInput) {
+    statusState.stateChange("summarizing", true);
 
-    //Prevents accidental multiple sessions
-    if (!summarizationReady) return;
-    summarizationReady = false;
-    
     const summary = document.getElementById('summary');
     summary.innerHTML = '';
     const loadingSpinner = getOrCreateLoadingSpinner(summary);
 
-    // Function to update the summary content
     const updateSummaryContent = (content) => {
         summary.innerHTML = `<span>${content.replace(/[\*-]/g, '')}</span>`;
     };
 
-    // Define the error callback to use the update function
-    const onSummaryErrorUpdate = (errorMessage) => {
-        updateSummaryContent(errorMessage);
-    };
+    const onSummaryErrorUpdate = (errorMessage) => updateSummaryContent(errorMessage);
 
-    // Request page content
     const pageContent = await getPageContent();
-
-    // Generate Summary
     const combinedSummary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
 
     updateSummaryContent(combinedSummary);
 
+    statusState.stateChange("summarizing", false);
+    if (!statusState.isSummarized()) statusState.setSummarized();
+
     loadingSpinner.remove();
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });
-    summarizationReady = true;
 }
 
 /**
- * Rewrites the contents on the webpage to have no bias or logical falacies at the desired reading level
- * @param {string} readingLevel - Desired reading level for the rewrite
+ * Rewrites the page content to ensure readability at the desired level,
+ * free from bias or logical fallacies. Updates the sidebar after processing.
+ * @param {string} readingLevel - The target reading level for the rewrite.
  */
 async function rewriteContent(readingLevel) {
+    statusState.stateChange("rewriting", true);
 
-    //Prevents accidental multiple sessions
-    if (!rewriteReady) return;
-    rewriteReady = false;
-    
     const summary = document.getElementById('summary').innerText;
-
-    // Fetch content elements
     const mainElements = document.querySelectorAll('article, main, section, div');
     const mainContentElements = await extractContentElements(mainElements);
     const contentElements = await filterContentElements(mainContentElements);
 
-    // Filter elements based on content length and word count
     const validElements = contentElements.filter(element => {
         const text = element.textContent.trim();
         return text.length > 0 && text.split(/\s+/).length >= 5;
     });
 
-    // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when api is working
+    // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when API is working
+
+    statusState.stateChange("rewriting", false);
 
     chrome.runtime.sendMessage({ action: "activateSummaryButton" });
     chrome.runtime.sendMessage({ action: "activateRewriteButton" });
-    rewriteReady = true;
-}
-
-/**
- * Analyzes a portion of page content and displays the result in the sidebar.
- * @param {string} pageData - Content data for analysis.
- */
-async function analyzeContent(pageData) {
-    analysisReady = false;
-    const analysisText = document.getElementById('analysis');
-    analysisText.innerHTML = '';
-    const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
-
-    // Function to update the bubble content
-    const updateAnalysisContent = (content) => {
-        analysisText.innerHTML = `<span>${formatTextResponse(content)}</span>`;
-    };
-
-    // Define the error callback to use the update function
-    const onAnalysisErrorUpdate = (errorMessage) => {
-        updateAnalysisContent(errorMessage);
-    };
-
-    // Analyze selected content
-    const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
-
-    // Final update with the result or final failure message
-    updateAnalysisContent(analysis);
-
-    loadingSpinner.remove();
-    analysisReady = true;
 }
 
 /**
@@ -189,108 +140,89 @@ async function analyzeContent(pageData) {
  * @param {string} type - Type of bubble to display (define, factCheck, or analysis).
  */
 async function displayBubble(selectedText, type) {
-    let result = '';
-
-    result = await populateBubble(type);
-
+    let result = await populateBubble(type);
     if (result === "Error") return;
 
+    const updateBubbleContent = (content, title) => {
+        const bubble = document.getElementById(type);
+        bubble.innerHTML = `
+            <div class="bubble-title">${title}</div>
+            <div class="bubble-content">${formatTextResponse(content)}</div>
+            <footer class="bubble-footer">
+                <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
+            </footer>
+        `;
+    };
+
+    const onErrorUpdate = (errorMessage) => updateBubbleContent(errorMessage, type.charAt(0).toUpperCase() + type.slice(1));
+
     if (type === "factCheckBubble") {
-        const factCheckBubble = document.getElementById(type);
-
-        // Function to update the bubble content
-        const updateFactCheckBubbleContent = (content) => {
-            factCheckBubble.innerHTML = `
-                <div class="bubble-title">Fact Check</div>
-                <div class="bubble-content">${formatTextResponse(content)}</div>
-                <footer class="bubble-footer">
-                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-                </footer>
-            `;
-        };
-
-        // Define the error callback to use the update function
-        const onFactCheckErrorUpdate = (errorMessage) => {
-            updateFactCheckBubbleContent(errorMessage);
-        };
-
-        result = await factCheck(selectedText, onFactCheckErrorUpdate);
-
-        // Final update with the result or final failure message
-        updateFactCheckBubbleContent(result);
-    } 
-    else if (type === "defineBubble") {
-        const defineBubble = document.getElementById(type);
-
-        // Function to update the bubble content
-        const updateDefineBubbleContent = (content) => {
-            defineBubble.innerHTML = `
-                <div class="bubble-title">Define</div>
-                <div class="bubble-content">${formatTextResponse(content)}</div>
-                <footer class="bubble-footer">
-                    <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-                </footer>
-            `;
-        };
-
-        // Define the error callback to use the update function
-        const onDefineErrorUpdate = (errorMessage) => {
-            updateDefineBubbleContent(errorMessage);
-        };
-
-        result = await define(selectedText, onDefineErrorUpdate);
-
-        // Final update with the result or final failure message
-        updateDefineBubbleContent(result);
-    } 
-    else if (type === "analysisBubble") {
-        const analyzeBubble = document.getElementById(type);
+        result = await factCheck(selectedText, onErrorUpdate);
+        updateBubbleContent(result, "Fact Check");
+    } else if (type === "defineBubble") {
+        result = await define(selectedText, onErrorUpdate);
+        updateBubbleContent(result, "Define");
+    } else if (type === "analysisBubble") {
         const analyzeButton = document.getElementById('analyzeButton');
-
+        const analyzeBubble = document.getElementById(type);
         if (!analyzeButton._listenerAdded) {
-
-            document.getElementById('analyzeButton').addEventListener('click', async () => {
-                const filteredText = selectedText
-                    .split('\n')
+            analyzeButton.addEventListener('click', async () => {
+                const filteredText = selectedText.split('\n')
                     .filter(line => (line.match(/ /g) || []).length >= 8)
                     .join('\n');
 
                 if (filteredText.length === 0 || filteredText.length > 4000) {
-                    const errorText = filteredText.length === 0
-                        ? "Error: Text must be highlighted."
-                        : "Error: Selected characters must be under 4000.";
-                    displayError(errorText);
-                    analyzeButton.remove();
-                    document.getElementById("currentCharCount").remove();
-                    document.getElementById("bubbleText").remove();
+                    displayErrorMessage(filteredText.length === 0 ? "Error: Text must be highlighted." : "Error: Selected characters must be under 4000.");
                     return;
                 }
+
                 analyzeButton.remove();
                 document.getElementById("currentCharCount").remove();
                 document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
                 await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
-
-                // Analysis Starts
-                await analyzeContent(filteredText);
+                analyzeContent(filteredText);
             });
-
             analyzeButton._listenerAdded = true;
         }
     }
 }
 
 /**
- * Updates character count in the sidebar based on the text currently selected by the user.
+ * Analyzes a selected portion of content and displays the result in the sidebar.
+ * Updates the sidebar with the analysis or an error message.
+ * @param {string} pageData - Content to be analyzed.
+ */
+async function analyzeContent(pageData) {
+    statusState.stateChange("analyzing", true);
+
+    const analysisText = document.getElementById('analysis');
+    analysisText.innerHTML = '';
+    const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
+
+    const updateAnalysisContent = (content) => {
+        analysisText.innerHTML = `<span>${formatTextResponse(content)}</span>`;
+    };
+
+    const onAnalysisErrorUpdate = (errorMessage) => updateAnalysisContent(errorMessage);
+
+    const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
+    updateAnalysisContent(analysis);
+
+    statusState.stateChange("analyzing", false);
+    loadingSpinner.remove();
+}
+
+/**
+ * Updates the character count in the sidebar based on the current text selection.
  */
 function updateCharacterCount() {
     const currentElementClass = document.getElementById("currentCharCount");
     if (currentElementClass) {
         const selectedText = window.getSelection().toString();
-        const filteredText = selectedText
-        .split('\n')
-        .filter(line => (line.match(/ /g) || []).length >= 8)
-        .join('\n');
+        const filteredText = selectedText.split('\n')
+            .filter(line => (line.match(/ /g) || []).length >= 8)
+            .join('\n');
         let characterCount = 0;
 
         try { characterCount = filteredText.length; }
@@ -298,22 +230,41 @@ function updateCharacterCount() {
 
         if (characterCount > 0) {
             currentElementClass.innerText = `Current Characters Selected: ${characterCount}`;
-            if (characterCount > 4000) {
-                currentElementClass.style.color = 'red';
-            } else {
-                currentElementClass.style.color = 'white';
-            }
+            currentElementClass.style.color = characterCount > 4000 ? 'red' : 'white';
         }
     }
 }
 
 /**
- * Displays an error message if conditions are not met when analyze button is pressed.
+ * Cleans up the model when the page is unloaded.
+ */
+function cleanup() {
+    chatBot.destroyModel();
+    document.removeEventListener("mouseup", updateCharacterCount);
+    document.removeEventListener("keyup", updateCharacterCount);
+}
+
+/**
+ * Returns the current statuses of the chatbot and the summarizing process.
+ * @returns {Object} - The current statuses of the chatbot and summarizing state.
+ */
+function getCurrentStatuses() {
+    return {
+        initialized: chatBot.isInitialized() ? "yes" : "no",
+        summarized: statusState.isSummarized() ? "yes" : "no",
+        notRunning: (statusState.allNotRunning() &&
+                    !chatBot.isInitializing() &&
+                    !chatBot.isResponding()) ? "yes" : "no"
+    };
+}
+
+/**
+ * Displays an error message in the analysis bubble if the text selection does not meet requirements.
  * @param {string} message - The error message to display.
  */
-function displayError(message) {
+function displayErrorMessage(message) {
     const analyzeBubble = document.getElementById('analysisBubble');
-    const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content')
+    const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content');
     
     let errorMessage = document.querySelector('.error-message');
     if (!errorMessage) {
@@ -325,15 +276,15 @@ function displayError(message) {
         errorMessage.style.textAlign = 'center';
         errorMessage.style.fontSize = '1em';
         errorMessage.style.fontWeight = '500';
-        analyzeBoxContainer.insertBefore(errorMessage, analyzeButton);
+        analyzeBoxContainer.insertBefore(errorMessage, document.getElementById('analyzeButton'));
     }
     errorMessage.innerText = message;
 }
 
 /**
- * Formats model response by applying HTML tags for emphasis, bold, bullets, and line breaks.
- * @param {string} response - Text response from model.
- * @returns {string} - Formatted HTML string.
+ * Formats the text response from the model, adding HTML tags for emphasis, bullets, etc.
+ * @param {string} response - The raw response text from the model.
+ * @returns {string} - The formatted HTML string.
  */
 function formatTextResponse(response) {
     let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
@@ -342,45 +293,4 @@ function formatTextResponse(response) {
     htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
     htmlData = htmlData.replace(/\n/g, "<br>");
     return htmlData;
-}
-
-/**
- * Checks if a summary has been generated and returns the status.
- * @returns {boolean} - True if a summary is present, false otherwise.
- */
-function checkSummary() {
-    const summary = document.getElementById('summary');
-    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
-            summary.innerText === "");
-}
-
-/**
- * Retrieves output from chatbot model with retry logic if the request fails.
- * @param {string} input - User input to send to the chatbot.
- * @param {number} retries - Maximum number of retry attempts.
- * @param {number} delay - Delay between retry attempts in milliseconds.
- */
-async function getChatBotOutput(input, retries = 10, delay = 1000) {
-    let result = '';
-    let attempt = 0;
-
-    if (modelInstance) {
-        while (attempt < retries) {
-            try {
-                result = await modelInstance.prompt(input);
-                chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
-                break;
-            } catch (error) {
-                console.log(`Error initializing content on attempt ${attempt + 1}:`, error);
-                attempt++;
-                if (attempt < retries) {
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
-                } else {
-                    console.log("Max retries reached. Returning empty result.");
-                }
-            }
-        }
-    }
 }

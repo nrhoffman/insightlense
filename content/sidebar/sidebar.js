@@ -7,10 +7,18 @@ export async function createSidebar() {
     let sidebar = document.getElementById('insightSidebar') || createSidebarElement();
     sidebar.style.display = 'block'; // Show the sidebar
 
-    // Event listener for close button
-    document.getElementById('closeSidebarBtn').addEventListener('click', () => {
-        sidebar.style.display = 'none';
-    });
+    // Event listener for close button (remove after trigger to optimize)
+    const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+    closeSidebarBtn?.addEventListener('click', () => hideSidebar(sidebar), { once: true });
+}
+
+/**
+ * Hides the sidebar by setting its display style to 'none'.
+ *
+ * @param {HTMLElement} sidebar - The sidebar element to hide.
+ */
+function hideSidebar(sidebar) {
+    sidebar.style.display = 'none';
 }
 
 /**
@@ -23,13 +31,24 @@ export async function createSidebar() {
 export function getOrCreateLoadingSpinner(parent) {
     let loadingSpinner = document.getElementById('loadingSpinner');
     if (!loadingSpinner) {
-        loadingSpinner = document.createElement('div');
-        loadingSpinner.id = 'loadingSpinner';
-        loadingSpinner.classList.add('spinner');
-
+        loadingSpinner = createLoadingSpinner();
         const boxContainer = parent.closest('.box-container');
-        boxContainer.insertBefore(loadingSpinner, parent);
+        if (boxContainer) {
+            boxContainer.insertBefore(loadingSpinner, parent);
+        }
     }
+    return loadingSpinner;
+}
+
+/**
+ * Creates the loading spinner element with the appropriate ID and class.
+ * 
+ * @returns {HTMLElement} The newly created loading spinner element.
+ */
+function createLoadingSpinner() {
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.id = 'loadingSpinner';
+    loadingSpinner.classList.add('spinner');
     return loadingSpinner;
 }
 
@@ -51,7 +70,7 @@ function createSidebarElement() {
         </div>
         <h3>Analysis</h3>
         <div class="box-container">
-            <p id="analysis">Highlight text, right click, and "Analyze". First generating summary can sometimes be beneficial.</p>
+            <p id="analysis">Highlight text, right-click, and "Analyze". First generating summary can sometimes be beneficial.</p>
         </div>
     `;
     document.body.appendChild(sidebar);
