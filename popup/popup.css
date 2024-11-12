@@ -252,6 +252,21 @@ body {
     word-wrap: break-word;
 }
 
+/* Typing Indicator Style */
+.typing-indicator {
+  color: #205e22;
+  font-style: bold;
+  text-align: left;
+  padding: 10px;
+  border-radius: 15px;
+  background-color: #f0f0f0;
+  border-top-left-radius: 0;
+  margin: 5px 0;
+  max-width: 10%;
+  max-height: 20px;
+  font-size: 2em;
+}
+
 /* User Message Bubble */
 .user-message {
   background-color: #205e22;

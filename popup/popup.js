@@ -1,4 +1,5 @@
 let listenersInitialized = false;
+let typingInterval = null;
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
@@ -51,6 +52,15 @@ function setChatBotOutput(output) {
     
     // Re-enable the send button
     sendButton.disabled = false;
+
+    // Stop the typing indicator animation
+    clearTypingIndicatorAnimation();
+
+    // Remove typing indicator from chat window
+    const typingIndicator = chatWindow.querySelector('.typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
 
     // Create a chatbot message bubble for the output
     const botMessage = document.createElement('div');
@@ -234,6 +244,19 @@ async function sendChatMessage() {
     userMessage.textContent = input;
     chatWindow.appendChild(userMessage);
 
+    // Check if an existing typing indicator exists and remove it
+    const existingTypingIndicator = chatWindow.querySelector('.typing-indicator');
+    if (existingTypingIndicator) existingTypingIndicator.remove();
+
+    // Create and append typing indicator
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'typing-indicator';
+    typingIndicator.textContent = '...'; // Start with a single dot
+    chatWindow.appendChild(typingIndicator);
+
+    // Start the typing animation
+    startTypingIndicatorAnimation(typingIndicator);
+
     // Scroll to the bottom of the chat window
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
@@ -241,4 +264,28 @@ async function sendChatMessage() {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
     });
+}
+
+/**
+ * Starts an animated typing indicator that cycles between ".", "..", and "..."
+ * to simulate the chatbot "typing" while processing a response.
+ * @param {HTMLElement} typingIndicator - The element displaying the typing animation.
+ */
+function startTypingIndicatorAnimation(typingIndicator) {
+    let dotCount = 1;
+    clearTypingIndicatorAnimation();
+    typingInterval = setInterval(() => {
+        typingIndicator.textContent = '.'.repeat(dotCount); // Update the text to ".", "..", "..."
+        dotCount = (dotCount % 3) + 1; // Cycle dotCount between 1 and 3
+    }, 500); // Update every 500ms
+}
+
+/**
+ * Stops the typing indicator animation by clearing the interval.
+ */
+function clearTypingIndicatorAnimation() {
+    if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = null;
+    }
 }
