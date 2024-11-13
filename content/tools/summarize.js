@@ -25,13 +25,15 @@ export async function generateSummary(pageContent, focusInput, onErrorUpdate) {
  * @param {string} pageContent - The content to summarize.
  * @param {string} focusInput - Specific topic or focus area for the summary.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
- * @param {number} [retries=6] - Maximum retry attempts for summarization.
+ * @param {number} [retries=3] - Maximum retry attempts for summarization.
  * @param {number} [delay=1000] - Initial delay (in ms) between retry attempts.
  * @returns {Promise<string>} The summary result.
  */
-export async function summarizePageContent(pageContent, focusInput, onErrorUpdate, retries = 6, delay = 1000) {
-    const session = await createSummarizerSession(focusInput);
-    return await attemptSummarization(session, pageContent, onErrorUpdate, retries, delay);
+export async function summarizePageContent(pageContent, focusInput, onErrorUpdate, retries = 3, delay = 1000) {
+    const session = await createSummarizerSession(focusInput, 4000, true);
+    const result = await attemptSummarization(session, pageContent, onErrorUpdate, retries, delay);
+    session.destroy();  // Ensure the session is destroyed after use
+    return result;
 }
 
 /**
@@ -45,27 +47,80 @@ export async function summarizePageContent(pageContent, focusInput, onErrorUpdat
  * @returns {Promise<string>} The combined summary of the segmented content.
  */
 async function summarizeLargePageContent(separateLines, maxChar, focusInput, onErrorUpdate) {
-    const session = await createSummarizerSession(focusInput);
-    let pageArray = [];
+    const session = await createSummarizerSession(focusInput, maxChar);
+    const sessionCombined = await createSummarizerSession(focusInput, maxChar, true);
+
+    try {
+        const chunks = await chunkContent(separateLines, maxChar, session, onErrorUpdate);
+
+        const totalCharSum = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        if (totalCharSum >= maxChar) {
+            return await summarizeChunksWithResummarization(chunks, maxChar, sessionCombined, onErrorUpdate);
+        }
+
+        return await combineAndSummarizeChunks(chunks, sessionCombined, onErrorUpdate);
+    } finally {
+        session.destroy();
+        sessionCombined.destroy();
+    }
+}
+
+/**
+ * Chunk content into segments based on the maxChar limit.
+ *
+ * @param {Array<string>} separateLines - Lines of content to chunk.
+ * @param {number} maxChar - Maximum character limit per chunk.
+ * @param {Object} session - The summarizer session.
+ * @param {function} onErrorUpdate - Callback function for error updates.
+ * @returns {Promise<Array<string>>} The summarized chunks.
+ */
+async function chunkContent(separateLines, maxChar, session, onErrorUpdate) {
     let curEl = '';
+    const chunks = [];
 
     for (const line of separateLines) {
         if ((curEl + line).length < maxChar) {
             curEl += line + '\n'; // Add line to current chunk if within limit
         } else {
-            // Summarize and start a new chunk when character limit is exceeded
-            pageArray.push(await attemptSummarization(session, curEl, onErrorUpdate));
+            chunks.push(await attemptSummarization(session, curEl, onErrorUpdate));
             curEl = line + '\n'; // Start a new chunk
         }
     }
 
-    // Summarize any remaining content in the last chunk
+    // Summarize the last chunk
     if (curEl.trim().length > 0) {
-        pageArray.push(await attemptSummarization(session, curEl, onErrorUpdate));
+        chunks.push(await attemptSummarization(session, curEl, onErrorUpdate));
     }
 
-    const combinedSummaryInput = pageArray.join('\n');
-    return await attemptSummarization(session, `Figure out main topic and summarize into a paragraph: ${combinedSummaryInput.trim()}`, onErrorUpdate);
+    return chunks;
+}
+
+/**
+ * Resummarize chunks if their combined length exceeds maxChar after first summarization.
+ *
+ * @param {Array<string>} chunks - The chunks to resummarize.
+ * @param {number} maxChar - Maximum character limit per segment.
+ * @param {Object} session - The summarizer session.
+ * @param {function} onErrorUpdate - Callback function for error updates.
+ * @returns {Promise<string>} The final summary after resummarizing.
+ */
+async function summarizeChunksWithResummarization(chunks, maxChar, session, onErrorUpdate) {
+    const chunkString = chunks.join('\n');
+    const resummarizedChunks = await chunkContent(chunkString.split('\n'), maxChar, session, onErrorUpdate);
+    return await combineAndSummarizeChunks(resummarizedChunks, session, onErrorUpdate);
+}
+
+/**
+ * Combine chunked summaries into one string and summarize.
+ *
+ * @param {Array<string>} chunks - The chunks to combine and summarize.
+ * @param {Object} session - The summarizer session.
+ * @param {function} onErrorUpdate - Callback function for error updates.
+ * @returns {Promise<string>} The final combined summary.
+ */
+async function combineAndSummarizeChunks(chunks, session, onErrorUpdate) {
+    const combinedSummaryInput = chunks.join('\n');
+    return await attemptSummarization(session, combinedSummaryInput.trim(), onErrorUpdate);
 }
 
 /**
@@ -74,11 +129,11 @@ async function summarizeLargePageContent(separateLines, maxChar, focusInput, onE
  * @param {Object} session - The summarizer session.
  * @param {string} prompt - Content to summarize.
  * @param {function} onErrorUpdate - Callback function to provide immediate error updates during retries.
- * @param {number} [retries=6] - Maximum retry attempts for summarization.
+ * @param {number} [retries=3] - Maximum retry attempts for summarization.
  * @param {number} [delay=1000] - Initial delay (in ms) between retry attempts.
  * @returns {Promise<string>} The summary of the provided prompt.
  */
-async function attemptSummarization(session, prompt, onErrorUpdate, retries = 6, delay = 1000) {
+async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3, delay = 1000) {
     let result = '';
     let attempt = 0;
 
@@ -116,11 +171,15 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 6,
  * Creates a summarizer session with the provided focus input.
  *
  * @param {string} focusInput - The topic or focus area for the summary.
+ * @param {number} maxChar - maxChar the summary can be
+ * @param {boolean} finalSummary - bool for whether this is a last summary.
  * @returns {Promise<Object>} The summarizer session object.
  */
-async function createSummarizerSession(focusInput) {
-    const context = getSummaryContext(focusInput);
-    return await ai.summarizer.create({ sharedContext: context });
+async function createSummarizerSession(focusInput, maxChar = 4000, finalSummary = false) {
+    const context = getSummaryContext(focusInput, maxChar);
+    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
+    else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    
 }
 
 /**
@@ -129,14 +188,9 @@ async function createSummarizerSession(focusInput) {
  * @param {string} focusInput - Specific topic or focus area for the summary.
  * @returns {string} The customized context string for summarization.
  */
-function getSummaryContext(focusInput) {
+function getSummaryContext(focusInput, maxChar) {
     const domain = window.location.hostname;
-    return `Domain content is coming from: ${domain}.
-            Mention where the content is coming from using domain provided.
-            Only output in English.
-            Only output in trained format and language.
-            Use paragraph form.
-            Only summarize the content.
-            Keep the summary short.
+    return `You must keep under ${maxChar} characters.
+            Mention the domain: ${domain}.
             Focus the summary on: "${focusInput}" if not blank.`;
 }

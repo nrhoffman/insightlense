@@ -62,6 +62,7 @@ function createLoadingSpinner() {
 function createSidebarElement() {
     const sidebar = document.createElement('div');
     sidebar.id = 'insightSidebar';
+    sidebar.class = 'insight-sidebar';
     sidebar.innerHTML = `
         <button id="closeSidebarBtn">✖️</button>
         <h3>Summary</h3>
@@ -69,8 +70,8 @@ function createSidebarElement() {
             <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
         </div>
         <h3>Analysis</h3>
-        <div class="box-container">
-            <p id="analysis">Highlight text, right-click, and "Analyze". First generating summary can sometimes be beneficial.</p>
+        <div class="box-container" id="analysisContainer">
+            <p id="analysis">Highlight text, right-click, and "Analyze". First generate summary.</p>
         </div>
     `;
     document.body.appendChild(sidebar);

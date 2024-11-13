@@ -1,5 +1,5 @@
 // Function that fetches the web page content by selecting relevant elements and processing them.
-export async function getPageContent() {
+export async function getPageContent(elements = false) {
     try {
         let mainElements = document.querySelectorAll('article, main, section, div');
         
@@ -7,12 +7,12 @@ export async function getPageContent() {
         console.log(`Found ${mainElements.length} elements on the page.`);
         
         const mainTemp = await extractContentElements(mainElements);
-        const contentTemp = await filterContentElements(mainTemp);
-        const contentClean = await cleanContentText(contentTemp);
-        const uniqueContent = Array.from(new Set(contentClean)).join('\n');
-        
-        console.log("Content extraction completed.");
-        return uniqueContent;
+        const contentFiltered = await filterContentElements(mainTemp);
+        const contentClean = await cleanContentText(contentFiltered);
+        const uniqueContent = Array.from(new Set(contentClean));
+        const stringContent = uniqueContent.join('\n');
+        if (elements) return contentClean;
+        else return stringContent;
     } catch (error) {
         console.error("Error fetching page content:", error);
         return ''; // Return an empty string if any error occurs
@@ -26,7 +26,7 @@ export async function getPageContent() {
  * @param {NodeList} mainElements - The list of elements (article, section, etc.) to process.
  * @returns {Array} A list of elements that contain relevant content.
  */
-export async function extractContentElements(mainElements) {
+async function extractContentElements(mainElements) {
     try {
         return Array.from(mainElements)
             .filter(element => {
@@ -39,7 +39,8 @@ export async function extractContentElements(mainElements) {
                 const isSidebarOrNav = className.includes('sidebar') || className.includes('widget') ||
                     className.includes('related') || className.includes('nav') ||
                     className.includes('footer') || className.includes('advert') ||
-                    className.includes('recirc') || className.includes('ad');
+                    className.includes('recirc') || className.includes('ad') ||
+                    className.includes('byline') || className.includes('card');
 
                 return !isSidebarOrNav; // Return only elements that are not part of sidebars or ads
             });
@@ -56,7 +57,7 @@ export async function extractContentElements(mainElements) {
  * @param {Array} mainTemp - The array of elements to filter.
  * @returns {Array} A filtered list of elements that are likely part of the main content.
  */
-export async function filterContentElements(mainTemp) {
+async function filterContentElements(mainTemp) {
     try {
         return mainTemp.flatMap(element =>
             Array.from(element.querySelectorAll('p, a, h1, h2, h3, h4, h5, h6, li, blockquote, span, figcaption, em'))

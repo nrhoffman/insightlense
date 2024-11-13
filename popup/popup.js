@@ -84,6 +84,16 @@ function initializeListeners() {
         summarizeButton.addEventListener('click', summarizeContent);
         rewriteButton.addEventListener('click', rewriteContent);
         sendButton.addEventListener('click', sendChatMessage);
+        userInput.addEventListener("keydown", function(event) {
+            // Check if the key pressed is "Enter"
+            if (event.key === "Enter") {
+                // Prevent the default behavior (i.e., adding a new line)
+                event.preventDefault();
+                
+                // Simulate a click on the send button
+                sendButton.click();
+            }
+        });
     }
 }
 

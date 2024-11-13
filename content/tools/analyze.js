@@ -103,7 +103,8 @@ async function handleRetry(delay) {
  * @returns {string} A formatted prompt that guides the analysis model in structured output.
  */
 function getAnalysisPrompt(summary) {
-    return `You will be given text to analyze with the given context: ${summary}
+    return `You will be given text to analyze.
+            Use this content if given: ${summary}
 
             Only use English.
             Ignore text you're not trained on.

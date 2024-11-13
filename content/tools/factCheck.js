@@ -59,7 +59,8 @@ export async function factCheck(selectedText, onErrorUpdate, retries = 6, delay 
  * @returns {string} - The constructed system prompt to guide the model's fact-checking output.
  */
 function getFactCheckPrompt(summary) {
-    return `You will be given text to fact-check with the given context: ${summary}
+    return `You will be given text to fact-check.
+            Use this context if given: "${summary}"
 
             Only use English.
             Ignore text you're not trained on.

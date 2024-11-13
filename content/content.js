@@ -5,7 +5,7 @@ import { factCheck } from './tools/factCheck.js';
 import { generateAnalysis } from './tools/analyze.js';
 import { generateSummary } from './tools/summarize.js';
 import { generateRewrite } from './tools/rewrite.js';
-import { getPageContent, extractContentElements, filterContentElements } from './utilities/getPageContent.js';
+import { getPageContent } from './utilities/getPageContent.js';
 import { populateBubble } from './bubbles/bubbles.js';
 import StatusStateMachine from './utilities/statusStateMachine';
 
@@ -117,16 +117,9 @@ async function rewriteContent(readingLevel) {
     statusState.stateChange("rewriting", true);
 
     const summary = document.getElementById('summary').innerText;
-    const mainElements = document.querySelectorAll('article, main, section, div');
-    const mainContentElements = await extractContentElements(mainElements);
-    const contentElements = await filterContentElements(mainContentElements);
+    const elements = getPageContent(true);
 
-    const validElements = contentElements.filter(element => {
-        const text = element.textContent.trim();
-        return text.length > 0 && text.split(/\s+/).length >= 5;
-    });
-
-    // await generateRewrite(validElements, summary, readingLevel); TODO: Finish when API is working
+    // await generateRewrite(elements, summary, readingLevel); TODO: Finish when API is working
 
     statusState.stateChange("rewriting", false);
 

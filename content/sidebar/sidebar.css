@@ -9,7 +9,7 @@
     border-radius: 10px 0 0 10px;
     padding: 20px;
     overflow-y: auto;
-    z-index: 9999;
+    z-index: 99999;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
     transition: transform 0.3s ease;
 }
@@ -36,6 +36,10 @@
 .box-container p {
     margin: 0;
     text-align: left;
+}
+
+#analysisContainer {
+    padding-bottom: 40px;
 }
 
 /* Spinner Styling */

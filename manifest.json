@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "InsightLense",
-  "description": "Fact checks web content.",
+  "description": "The InsightLense Chrome Extension is your own personal AI web assistant that has your safe consumption of knowledge as it's top priority.",
   "version": "1.0",
   "permissions": [
     "activeTab",

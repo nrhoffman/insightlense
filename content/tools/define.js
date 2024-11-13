@@ -12,7 +12,9 @@
 export async function define(selectedText, onErrorUpdate, retries = 6, delay = 1000) {
     let attempt = 0;
     let session = null;
-    const systemPrompt = "Give the definition. Keep answers short.";
+    const summary = document.getElementById('summary').textContent;
+    const systemPrompt = `Give the definition. Keep answers short.
+                          Use this context if given: "${summary}"`;
 
     while (attempt < retries) {
         try {
