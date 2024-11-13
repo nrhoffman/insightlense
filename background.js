@@ -15,6 +15,7 @@ function createContextMenus() {
     createContextMenuItem("define", "Define");
     createContextMenuItem("factCheck", "Fact-Check");
     createContextMenuItem("analyze", "Analyze");
+    createContextMenuItem("rewrite", "Rewrite")
 }
 
 /**
@@ -72,7 +73,8 @@ function handleContextMenuAction(info, tab) {
     const actionMap = {
         "define": "displayDefineBubble",
         "factCheck": "displayFactCheckBubble",
-        "analyze": "displayAnalysisBubble"
+        "analyze": "displayAnalysisBubble",
+        "rewrite": "displayRewriteBubble"
     };
 
     const action = actionMap[info.menuItemId];

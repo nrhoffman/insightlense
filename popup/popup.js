@@ -4,7 +4,6 @@ let typingInterval = null;
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
 const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
-const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
 const userInput = document.getElementById('chatInput');
 
@@ -16,14 +15,8 @@ const onMessageListener = (request, sender, sendResponse) => {
     switch (request.action) {
         case "activateButtons":
             summarizeButton.disabled = false;
-            rewriteButton.disabled = false;
-            rewriteButton.textContent = "Rewrite";
             sendButton.disabled = false;
             initChatBot();
-            break;
-        case "activateButtonsNotRewrite":
-            summarizeButton.disabled = false;
-            sendButton.disabled = false;
             break;
         case "initChatBot":
             initChatBot();
@@ -70,8 +63,6 @@ function initChatBot() {
  */
 function setChatBotOutput(output) {
     summarizeButton.disabled = false;
-    rewriteButton.disabled = false;
-    rewriteButton.textContent = "Rewrite";
     sendButton.disabled = false;
 
     // Stop the typing indicator animation
@@ -105,7 +96,6 @@ function initializeListeners() {
 
         // Attach button event listeners
         summarizeButton.addEventListener('click', summarizeContent);
-        rewriteButton.addEventListener('click', rewriteContent);
         sendButton.addEventListener('click', sendChatMessage);
         userInput.addEventListener("keydown", function (event) {
             // Check if the key pressed is "Enter"
@@ -127,7 +117,6 @@ function removeListeners() {
     if (listenersInitialized) {
         chrome.runtime.onMessage.removeListener(onMessageListener);
         summarizeButton.removeEventListener('click', summarizeContent);
-        rewriteButton.removeEventListener('click', rewriteContent);
         sendButton.removeEventListener('click', sendChatMessage);
         listenersInitialized = false;
     }
@@ -200,11 +189,6 @@ function updateButtonStates(status) {
         sendButton.disabled = false;
         initChatBot();
     }
-
-    if (status.summarized === "yes" && status.notRunning === "yes") {
-        rewriteButton.disabled = false;
-        rewriteButton.textContent = "Rewrite";
-    }
 }
 
 /**
@@ -216,33 +200,10 @@ async function summarizeContent() {
 
         // Disable buttons during summarization
         summarizeButton.disabled = true;
-        rewriteButton.disabled = true;
         sendButton.disabled = true;
 
         console.log("Sending summarize message...");
         chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
-    });
-}
-
-/**
- * Handles the rewrite button click event, sends message to rewrite content.
- */
-async function rewriteContent() {
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-
-        // Get the selected reading level
-        const selectedReadingLevel = getSelectedReadingLevel();
-
-        // Disable buttons during rewrite
-        summarizeButton.disabled = true;
-        sendButton.disabled = true;
-        rewriteButton.disabled = true;
-
-        console.log("Sending rewrite message...");
-        chrome.tabs.sendMessage(tabs[0].id, {
-            action: "rewriteContent",
-            readingLevel: selectedReadingLevel
-        });
     });
 }
 
@@ -271,7 +232,6 @@ async function sendChatMessage() {
     userInput.value = '';
     sendButton.disabled = true;
     summarizeButton.disabled = true;
-    rewriteButton.disabled = true;
 
     // Create and append user message bubble to chat window
     const userMessage = document.createElement('div');

@@ -36,7 +36,6 @@ export async function populateBubble(type) {
         displayError(bubble, "factCheck");
         return "Error";
     }
-
     // Populate bubble content based on type
     switch (type) {
         case 'factCheckBubble':
@@ -47,6 +46,10 @@ export async function populateBubble(type) {
             break;
         case 'analysisBubble':
             fillInAnalysisBubble(bubble);
+            break;
+        case 'rewriteBubble':
+            console.log("Here");
+            fillInRewriteBubble(bubble);
             break;
     }
 
@@ -215,3 +218,45 @@ function fillInAnalysisBubble(bubble) {
         </footer>
     `;
 }
+
+/**
+ * Populates a rewrite bubble with checkboxes and button for content rewriting.
+ * Select text, select a reading level and click the button to initiate rewrite.
+ * 
+ * @param {HTMLElement} bubble - The bubble element to populate with rewrite content.
+ */
+function fillInRewriteBubble(bubble) {
+    bubble.innerHTML = `
+        <div class="bubble-title">Rewrite</div>
+        <div class="bubble-content">
+            <div id="bubbleText">Max Character Count: 4000</div>
+            <div id="currentCharCount">Current Characters Selected: 0</div>
+            <button id="rewriteButton">Rewrite</button>
+        </div>
+        <footer class="bubble-footer">
+            <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
+        </footer>
+    `;
+}
+
+{/* <div id="reading-level" class="reading-level">
+<div class="checkbox-text">Reading Level:</div>
+<div class="checkbox-container">
+    <label class="custom-checkbox">
+        <input type="checkbox" id="childrenLevel" name="readingLevel" value="children">
+        <span class="checkbox-label">Children</span>
+    </label>
+    <label class="custom-checkbox">
+        <input type="checkbox" id="collegeLevel" name="readingLevel" value="college">
+        <span class="checkbox-label">College</span>
+    </label>
+    <label class="custom-checkbox">
+        <input type="checkbox" id="currentLevel" name="readingLevel" value="current" checked>
+        <span class="checkbox-label">Current</span>
+    </label>
+</div>
+</div>
+<div class="loading-spinner-container" id="loadingContainer">
+<div id="loadingSpinner" class="loading-spinner" style="display: none;"></div>
+</div>
+ */}

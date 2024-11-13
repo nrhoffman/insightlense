@@ -1,5 +1,5 @@
 // Function that fetches the web page content by selecting relevant elements and processing them.
-export async function getPageContent(elements = false) {
+export async function getPageContent() {
     try {
         let mainElements = document.querySelectorAll('article, main, section, div');
         
@@ -11,8 +11,7 @@ export async function getPageContent(elements = false) {
         const contentClean = await cleanContentText(contentFiltered);
         const uniqueContent = Array.from(new Set(contentClean));
         const stringContent = uniqueContent.join('\n');
-        if (elements) return contentClean;
-        else return stringContent;
+        return stringContent;
     } catch (error) {
         console.error("Error fetching page content:", error);
         return ''; // Return an empty string if any error occurs

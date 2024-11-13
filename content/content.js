@@ -27,9 +27,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'summarizeContent':
             if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
             break;
-        case 'rewriteContent':
-            if (!statusState.isRunning("rewriting")) rewriteContent(request.readingLevel);
-            break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
             break;
@@ -41,6 +38,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'displayAnalysisBubble':
             displayBubble(request.selectedText, 'analysisBubble');
+            break;
+        case 'displayRewriteBubble':
+            displayBubble(request.selectedText, 'rewriteBubble');
             break;
         case 'getStatuses':
             sendResponse(getCurrentStatuses());
@@ -65,7 +65,7 @@ async function initializeChatBot() {
     if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
         const pageContent = await getPageContent();
         await chatBot.initializeModel(pageContent);
-        chrome.runtime.sendMessage({ action: "activateButtonsNotRewrite" });
+        chrome.runtime.sendMessage({ action: "activateButtons" });
         chrome.runtime.sendMessage({ action: "initChatBot" });
     }
 }
@@ -108,24 +108,6 @@ async function summarizeContent(focusInput) {
 
     statusState.stateChange("summarizing", false);
     if (!statusState.isSummarized()) statusState.setSummarized();
-
-    chrome.runtime.sendMessage({ action: "activateButtons" });
-}
-
-/**
- * Rewrites the page content to ensure readability at the desired level,
- * free from bias or logical fallacies. Updates the sidebar after processing.
- * @param {string} readingLevel - The target reading level for the rewrite.
- */
-async function rewriteContent(readingLevel) {
-    statusState.stateChange("rewriting", true);
-
-    const summary = document.getElementById('summary').innerText;
-    const elements = getPageContent(true);
-
-    // await generateRewrite(elements, summary, readingLevel); TODO: Finish when API is working
-
-    statusState.stateChange("rewriting", false);
 
     chrome.runtime.sendMessage({ action: "activateButtons" });
 }
@@ -181,6 +163,31 @@ async function displayBubble(selectedText, type) {
             });
             analyzeButton._listenerAdded = true;
         }
+    } else if (type === "rewriteBubble") {
+        const rewriteButton = document.getElementById('rewriteButton');
+        const rewriteBubble = document.getElementById(type);
+
+
+        // if (!analyzeButton._listenerAdded) {
+        //     analyzeButton.addEventListener('click', async () => {
+        //         const filteredText = selectedText.split('\n')
+        //             .filter(line => (line.match(/ /g) || []).length >= 8)
+        //             .join('\n');
+
+        //         if (filteredText.length === 0 || filteredText.length > 4000) {
+        //             displayErrorMessage(filteredText.length === 0 ? "Error: Text must be highlighted." : "Error: Selected characters must be under 4000.");
+        //             return;
+        //         }
+
+        //         analyzeButton.remove();
+        //         document.getElementById("currentCharCount").remove();
+        //         document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
+        //         await new Promise(r => setTimeout(r, 3000));
+        //         analyzeBubble.remove();
+        //         analyzeContent(filteredText);
+        //     });
+        //     analyzeButton._listenerAdded = true;
+        // }
     }
 }
 
