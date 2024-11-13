@@ -1,3 +1,8 @@
+const ONE_DAY_MS = 12 * 60 * 60 * 1000;
+
+setInterval(clearExpiredStorage, ONE_DAY_MS);
+clearExpiredStorage();
+
 // Listener for Chrome extension installation event. Creates context menu options when the extension is installed.
 chrome.runtime.onInstalled.addListener(() => {
     createContextMenus();
@@ -79,6 +84,25 @@ function handleContextMenuAction(info, tab) {
             chrome.tabs.sendMessage(tab.id, { action: action, selectedText: info.selectionText });
         } catch (error) {
             console.error("Error in context menu action:", error);
+        }
+    }
+}
+
+
+/**
+ * Periodically checks all stored items and removes any that are older than 24 hours.
+ * Call this function periodically to maintain storage within the 24-hour limit.
+ */
+async function clearExpiredStorage() {
+    const allData = await chrome.storage.local.get();
+    const currentTime = Date.now();
+    
+    for (const key in allData) {
+        const { timestamp } = allData[key];
+        
+        // Remove items older than 24 hours
+        if (timestamp && (currentTime - timestamp) > ONE_DAY_MS) {
+            await chrome.storage.local.remove(key);
         }
     }
 }

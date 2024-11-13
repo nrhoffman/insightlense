@@ -22,6 +22,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case "showSidebar":
             createSidebar();
+            loadStoredContent();
             break;
         case 'summarizeContent':
             if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
@@ -62,8 +63,8 @@ async function initializeChatBot() {
     if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
         const pageContent = await getPageContent();
         await chatBot.initializeModel(pageContent);
-        chrome.runtime.sendMessage({ action: "activateSendButton" });
-        chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+        chrome.runtime.sendMessage({ action: "activateButtonsNotRewrite" });
+        chrome.runtime.sendMessage({ action: "initChatBot" });
     }
 }
 
@@ -74,6 +75,7 @@ async function initializeChatBot() {
  */
 async function getChatBotOutput(input) {
     let result = await chatBot.getChatBotOutput(input);
+    chrome.runtime.sendMessage({ action: "activateButtons" });
     chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
 }
 
@@ -99,13 +101,14 @@ async function summarizeContent(focusInput) {
     const combinedSummary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
 
     updateSummaryContent(combinedSummary);
+    loadingSpinner.remove();
+
+    await saveContentToStorage("summary", combinedSummary);
 
     statusState.stateChange("summarizing", false);
     if (!statusState.isSummarized()) statusState.setSummarized();
 
-    loadingSpinner.remove();
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    chrome.runtime.sendMessage({ action: "activateButtons" });
 }
 
 /**
@@ -123,8 +126,7 @@ async function rewriteContent(readingLevel) {
 
     statusState.stateChange("rewriting", false);
 
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    chrome.runtime.sendMessage({ action: "activateButtons" });
 }
 
 /**
@@ -201,9 +203,11 @@ async function analyzeContent(pageData) {
 
     const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
     updateAnalysisContent(analysis);
+    loadingSpinner.remove();
+
+    await saveContentToStorage("analysis", analysis);
 
     statusState.stateChange("analyzing", false);
-    loadingSpinner.remove();
 }
 
 /**
@@ -272,6 +276,54 @@ function displayErrorMessage(message) {
         analyzeBoxContainer.insertBefore(errorMessage, document.getElementById('analyzeButton'));
     }
     errorMessage.innerText = message;
+}
+
+/**
+ * Saves content to Chrome's local storage along with the current timestamp.
+ * This helps to track when each entry was saved for expiration purposes.
+ * 
+ * @param {string} type - The type of content to save (e.g., "summary" or "analysis").
+ * @param {string} content - The content to save in local storage.
+ */
+async function saveContentToStorage(type, content) {
+    const url = window.location.href;
+    const key = `${url}_${type}`;
+    const data = {
+        content: content,
+        timestamp: Date.now()
+    };
+    data[key] = content;
+    await chrome.storage.local.set(data);
+}
+
+/**
+ * Retrieves content from Chrome's local storage and checks if it is expired.
+ * Returns the content only if it is less than 24 hours old.
+ * 
+ * @param {string} type - The type of content to retrieve (e.g., "summary" or "analysis").
+ * @returns {string|null} - Returns the saved content if it exists and is recent; otherwise, returns null.
+ */
+async function getContentFromStorage(type) {
+    const url = window.location.href;
+    const key = `${url}_${type}`;
+    const data = await chrome.storage.local.get(key);
+    return data[key] || null;
+}
+
+/**
+ * Loads stored summary and analysis content for the current page from Chrome's local storage.
+ * If content is found, it updates the corresponding HTML elements in the sidebar to display the stored data.
+ */
+async function loadStoredContent() {
+    const storedSummary = await getContentFromStorage("summary");
+    const storedAnalysis = await getContentFromStorage("analysis");
+
+    if (storedSummary) {
+        document.getElementById('summary').innerHTML = `<span>${storedSummary.replace(/[\*-]/g, '')}</span>`;
+    }
+    if (storedAnalysis) {
+        document.getElementById('analysis').innerHTML = `<span>${formatTextResponse(storedAnalysis)}</span>`;
+    }
 }
 
 /**

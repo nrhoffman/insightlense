@@ -14,15 +14,18 @@ const userInput = document.getElementById('chatInput');
 const onMessageListener = (request, sender, sendResponse) => {
 
     switch (request.action) {
-        case "activateSummaryButton":
+        case "activateButtons":
             summarizeButton.disabled = false;
-            break;
-        case "activateRewriteButton":
             rewriteButton.disabled = false;
             rewriteButton.textContent = "Rewrite";
+            sendButton.disabled = false;
             break;
-        case "activateSendButton":
-            activateSendButton();
+        case "activateButtonsNotRewrite":
+            summarizeButton.disabled = false;
+            sendButton.disabled = false;
+            break;
+        case "initChatBot":
+            initChatBot();
             break;
         case "setChatBotOutput":
             setChatBotOutput(request.output);
@@ -31,10 +34,9 @@ const onMessageListener = (request, sender, sendResponse) => {
 };
 
 /**
- * Activate the send button and display initial message.
+ * Initialize Chat Bot button and window
  */
-function activateSendButton() {
-    sendButton.disabled = false;
+function initChatBot() {
     chatWindow.innerHTML = '';
 
     // Create a chatbot message bubble
@@ -49,9 +51,6 @@ function activateSendButton() {
  * @param {string} output - The chatbot's response text.
  */
 function setChatBotOutput(output) {
-    
-    // Re-enable the send button
-    sendButton.disabled = false;
 
     // Stop the typing indicator animation
     clearTypingIndicatorAnimation();
@@ -171,12 +170,10 @@ async function checkStatus(tabId) {
  * Update button states based on the current status of the model.
  */
 function updateButtonStates(status) {
-    if (status.initialized === "yes") {
-        activateSendButton();
-    }
 
     if (status.notRunning === "yes" && status.initialized === "yes") {
         summarizeButton.disabled = false;
+        sendButton.disabled = false;
     }
 
     if (status.summarized === "yes" && status.notRunning === "yes") {
@@ -195,6 +192,7 @@ async function summarizeContent() {
         // Disable buttons during summarization
         summarizeButton.disabled = true;
         rewriteButton.disabled = true;
+        sendButton.disabled = true;
 
         console.log("Sending summarize message...");
         chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
@@ -212,8 +210,8 @@ async function rewriteContent() {
 
         // Disable buttons during rewrite
         summarizeButton.disabled = true;
+        sendButton.disabled = true;
         rewriteButton.disabled = true;
-        rewriteButton.textContent = "Doesn't Currently Work";
 
         console.log("Sending rewrite message...");
         chrome.tabs.sendMessage(tabs[0].id, {
@@ -247,6 +245,8 @@ async function sendChatMessage() {
     // Clear the input field and disable the send button
     userInput.value = '';
     sendButton.disabled = true;
+    summarizeButton.disabled = true;
+    rewriteButton.disabled = true;
 
     // Create and append user message bubble to chat window
     const userMessage = document.createElement('div');
