@@ -53,7 +53,9 @@ document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
 
 // Listen for page unload event to clean up the model
-window.addEventListener('beforeunload', cleanup);
+window.onbeforeunload = async function () {
+    await cleanup();  // Ensure cleanup is completed before page unloads
+};
 
 /**
  * Initializes the chatbot model by extracting and processing the page content.
@@ -75,7 +77,6 @@ async function initializeChatBot() {
  */
 async function getChatBotOutput(input) {
     let result = await chatBot.getChatBotOutput(input);
-    chrome.runtime.sendMessage({ action: "activateButtons" });
     chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
 }
 
@@ -235,7 +236,7 @@ function updateCharacterCount() {
 /**
  * Cleans up the model when the page is unloaded.
  */
-function cleanup() {
+async function cleanup() {
     chatBot.destroyModel();
     document.removeEventListener("mouseup", updateCharacterCount);
     document.removeEventListener("keyup", updateCharacterCount);
@@ -250,8 +251,8 @@ function getCurrentStatuses() {
         initialized: chatBot.isInitialized() ? "yes" : "no",
         summarized: statusState.isSummarized() ? "yes" : "no",
         notRunning: (statusState.allNotRunning() &&
-                    !chatBot.isInitializing() &&
-                    !chatBot.isResponding()) ? "yes" : "no"
+            !chatBot.isInitializing() &&
+            !chatBot.isResponding()) ? "yes" : "no"
     };
 }
 
@@ -262,7 +263,7 @@ function getCurrentStatuses() {
 function displayErrorMessage(message) {
     const analyzeBubble = document.getElementById('analysisBubble');
     const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content');
-    
+
     let errorMessage = document.querySelector('.error-message');
     if (!errorMessage) {
         errorMessage = document.createElement('div');

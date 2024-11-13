@@ -24,7 +24,6 @@ const onMessageListener = (request, sender, sendResponse) => {
         case "activateButtonsNotRewrite":
             summarizeButton.disabled = false;
             sendButton.disabled = false;
-            initChatBot();
             break;
         case "initChatBot":
             initChatBot();
@@ -41,11 +40,28 @@ const onMessageListener = (request, sender, sendResponse) => {
 function initChatBot() {
     chatWindow.innerHTML = '';
 
-    // Create a chatbot message bubble
-    const botMessage = document.createElement('div');
-    botMessage.className = 'bot-message';
-    botMessage.textContent = "I'm ready for any questions.";
-    chatWindow.appendChild(botMessage);
+    // Retrieve saved conversation from storage
+    chrome.storage.local.get(['chatConversation'], (result) => {
+        const messages = result.chatConversation || [];
+
+        // Add each message to the chat window
+        messages.forEach(msg => {
+            const messageElem = document.createElement('div');
+            messageElem.className = msg.className;
+            messageElem.textContent = msg.text;
+            chatWindow.appendChild(messageElem);
+        });
+
+        // Append a starting bot message if chat is empty
+        if (messages.length === 0) {
+            const botMessage = document.createElement('div');
+            botMessage.className = 'bot-message';
+            botMessage.textContent = "I'm ready for any questions.";
+            chatWindow.appendChild(botMessage);
+        }
+
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    });
 }
 
 /**
@@ -53,6 +69,10 @@ function initChatBot() {
  * @param {string} output - The chatbot's response text.
  */
 function setChatBotOutput(output) {
+    summarizeButton.disabled = false;
+    rewriteButton.disabled = false;
+    rewriteButton.textContent = "Rewrite";
+    sendButton.disabled = false;
 
     // Stop the typing indicator animation
     clearTypingIndicatorAnimation();
@@ -71,6 +91,8 @@ function setChatBotOutput(output) {
     // Append the bot message to the chat window and scroll to the bottom
     chatWindow.appendChild(botMessage);
     chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    saveConversation(botMessage);
 }
 
 /**
@@ -85,12 +107,12 @@ function initializeListeners() {
         summarizeButton.addEventListener('click', summarizeContent);
         rewriteButton.addEventListener('click', rewriteContent);
         sendButton.addEventListener('click', sendChatMessage);
-        userInput.addEventListener("keydown", function(event) {
+        userInput.addEventListener("keydown", function (event) {
             // Check if the key pressed is "Enter"
             if (event.key === "Enter") {
                 // Prevent the default behavior (i.e., adding a new line)
                 event.preventDefault();
-                
+
                 // Simulate a click on the send button
                 sendButton.click();
             }
@@ -257,6 +279,8 @@ async function sendChatMessage() {
     userMessage.textContent = input;
     chatWindow.appendChild(userMessage);
 
+    saveConversation(userMessage);
+
     // Check if an existing typing indicator exists and remove it
     const existingTypingIndicator = chatWindow.querySelector('.typing-indicator');
     if (existingTypingIndicator) existingTypingIndicator.remove();
@@ -264,7 +288,7 @@ async function sendChatMessage() {
     // Create and append typing indicator
     const typingIndicator = document.createElement('div');
     typingIndicator.className = 'typing-indicator';
-    typingIndicator.textContent = '...'; // Start with a single dot
+    typingIndicator.textContent = '.'; // Start with a single dot
     chatWindow.appendChild(typingIndicator);
 
     // Start the typing animation
@@ -301,4 +325,34 @@ function clearTypingIndicatorAnimation() {
         clearInterval(typingInterval);
         typingInterval = null;
     }
+}
+
+/**
+ * Appends the new message to the existing conversation array in Chrome's local storage,
+ * ensuring that no more than 50 messages are stored.
+ */
+function saveConversation(messageElem) {
+    // Retrieve the existing conversation from storage
+    chrome.storage.local.get(['chatConversation'], (result) => {
+        // If there are existing messages, append the new one; otherwise, create a new array
+        const messages = result.chatConversation || [];
+
+        // Create the new message object
+        const newMessage = {
+            text: messageElem.textContent,
+            className: messageElem.className,
+            timestamp: Date.now()
+        };
+
+        // Append the new message to the array
+        messages.push(newMessage);
+
+        // If there are more than 50 messages, remove the oldest one (FIFO)
+        if (messages.length > 25) {
+            messages.shift(); // Remove the first element (oldest message)
+        }
+
+        // Save the updated conversation array back to local storage
+        chrome.storage.local.set({ chatConversation: messages });
+    });
 }

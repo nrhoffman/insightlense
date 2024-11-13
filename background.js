@@ -96,13 +96,25 @@ function handleContextMenuAction(info, tab) {
 async function clearExpiredStorage() {
     const allData = await chrome.storage.local.get();
     const currentTime = Date.now();
-    
+
     for (const key in allData) {
         const { timestamp } = allData[key];
-        
+
         // Remove items older than 24 hours
         if (timestamp && (currentTime - timestamp) > ONE_DAY_MS) {
             await chrome.storage.local.remove(key);
+        }
+    }
+
+    // Clear expired messages within 'chatConversation'
+    if (allData.chatConversation) {
+        const recentMessages = allData.chatConversation.filter(
+            message => message.timestamp && (currentTime - message.timestamp) <= ONE_DAY_MS
+        );
+
+        // Update 'chatConversation' in storage only if there are changes
+        if (recentMessages.length !== allData.chatConversation.length) {
+            await chrome.storage.local.set({ chatConversation: recentMessages });
         }
     }
 }
