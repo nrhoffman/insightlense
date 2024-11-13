@@ -19,10 +19,12 @@ const onMessageListener = (request, sender, sendResponse) => {
             rewriteButton.disabled = false;
             rewriteButton.textContent = "Rewrite";
             sendButton.disabled = false;
+            initChatBot();
             break;
         case "activateButtonsNotRewrite":
             summarizeButton.disabled = false;
             sendButton.disabled = false;
+            initChatBot();
             break;
         case "initChatBot":
             initChatBot();
@@ -174,6 +176,7 @@ function updateButtonStates(status) {
     if (status.notRunning === "yes" && status.initialized === "yes") {
         summarizeButton.disabled = false;
         sendButton.disabled = false;
+        initChatBot();
     }
 
     if (status.summarized === "yes" && status.notRunning === "yes") {
