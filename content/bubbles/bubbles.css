@@ -17,6 +17,10 @@
     display: block;
 }
 
+#rewriteBubble{
+  max-width: 300px;
+}
+
 .bubble-title {
     font-weight: bold;
     font-size: 16px;

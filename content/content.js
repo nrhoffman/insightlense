@@ -166,29 +166,46 @@ async function displayBubble(selectedText, type) {
     } else if (type === "rewriteBubble") {
         const rewriteButton = document.getElementById('rewriteButton');
         const rewriteBubble = document.getElementById(type);
+        const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
+        const loadingForBubble = document.getElementById('loadingContainer');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function () {
+                checkboxes.forEach(cb => {
+                    if (cb !== this) cb.checked = false;
+                });
+            });
+        });
 
+        if (!rewriteButton._listenerAdded) {
+            rewriteButton.addEventListener('click', async () => {
+                const selectedReadingLevel = getSelectedReadingLevel();
+                rewriteButton.remove();
+                document.getElementById('reading-level').remove();
+                document.getElementById("bubbleText").remove();
+                document.getElementById("currentCharCount").remove();
+                loadingForBubble.classList.add('active');
 
-        // if (!analyzeButton._listenerAdded) {
-        //     analyzeButton.addEventListener('click', async () => {
-        //         const filteredText = selectedText.split('\n')
-        //             .filter(line => (line.match(/ /g) || []).length >= 8)
-        //             .join('\n');
+                // await rewriteContent(selectedReadingLevel);
 
-        //         if (filteredText.length === 0 || filteredText.length > 4000) {
-        //             displayErrorMessage(filteredText.length === 0 ? "Error: Text must be highlighted." : "Error: Selected characters must be under 4000.");
-        //             return;
-        //         }
-
-        //         analyzeButton.remove();
-        //         document.getElementById("currentCharCount").remove();
-        //         document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
-        //         await new Promise(r => setTimeout(r, 3000));
-        //         analyzeBubble.remove();
-        //         analyzeContent(filteredText);
-        //     });
-        //     analyzeButton._listenerAdded = true;
-        // }
+                // rewriteBubble.remove();
+            });
+            rewriteButton._listenerAdded = true;
+        }
     }
+}
+
+/**
+ * Returns the selected reading level based on checkbox selection.
+ */
+function getSelectedReadingLevel() {
+    const childrenCheckbox = document.getElementById('childrenLevel');
+    const collegeCheckbox = document.getElementById('collegeLevel');
+    const currentCheckbox = document.getElementById('currentLevel');
+
+    if (childrenCheckbox.checked) return `a children's reading level`;
+    if (collegeCheckbox.checked) return 'a college reading level';
+    if (currentCheckbox.checked) return `the reading level it's currently at`;
+    return '';
 }
 
 /**

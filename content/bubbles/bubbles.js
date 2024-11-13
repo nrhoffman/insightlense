@@ -231,32 +231,33 @@ function fillInRewriteBubble(bubble) {
         <div class="bubble-content">
             <div id="bubbleText">Max Character Count: 4000</div>
             <div id="currentCharCount">Current Characters Selected: 0</div>
+
+            <div id="reading-level" class="reading-level">
+                <div class="checkbox-text">Reading Level:</div>
+                <div class="checkbox-container">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="childrenLevel" name="readingLevel" value="children">
+                        <span class="checkbox-label">Children</span>
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="collegeLevel" name="readingLevel" value="college">
+                        <span class="checkbox-label">College</span>
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="currentLevel" name="readingLevel" value="current" checked>
+                        <span class="checkbox-label">Current</span>
+                    </label>
+                </div>
+            </div>
+
             <button id="rewriteButton">Rewrite</button>
+
+            <div class="loading-spinner-container" id="loadingContainer">
+                <div id="loadingSpinner" class="loading-spinner"></div>
+            </div>
         </div>
         <footer class="bubble-footer">
             <small>Click And Hold To Drag<br>Double Click Bubble To Close</small>
         </footer>
     `;
 }
-
-{/* <div id="reading-level" class="reading-level">
-<div class="checkbox-text">Reading Level:</div>
-<div class="checkbox-container">
-    <label class="custom-checkbox">
-        <input type="checkbox" id="childrenLevel" name="readingLevel" value="children">
-        <span class="checkbox-label">Children</span>
-    </label>
-    <label class="custom-checkbox">
-        <input type="checkbox" id="collegeLevel" name="readingLevel" value="college">
-        <span class="checkbox-label">College</span>
-    </label>
-    <label class="custom-checkbox">
-        <input type="checkbox" id="currentLevel" name="readingLevel" value="current" checked>
-        <span class="checkbox-label">Current</span>
-    </label>
-</div>
-</div>
-<div class="loading-spinner-container" id="loadingContainer">
-<div id="loadingSpinner" class="loading-spinner" style="display: none;"></div>
-</div>
- */}
