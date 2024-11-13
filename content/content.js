@@ -22,6 +22,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case "showSidebar":
             createSidebar();
+            loadStoredContent();
             break;
         case 'summarizeContent':
             if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
@@ -52,7 +53,9 @@ document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
 
 // Listen for page unload event to clean up the model
-window.addEventListener('beforeunload', cleanup);
+window.onbeforeunload = async function () {
+    await cleanup();  // Ensure cleanup is completed before page unloads
+};
 
 /**
  * Initializes the chatbot model by extracting and processing the page content.
@@ -62,8 +65,8 @@ async function initializeChatBot() {
     if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
         const pageContent = await getPageContent();
         await chatBot.initializeModel(pageContent);
-        chrome.runtime.sendMessage({ action: "activateSendButton" });
-        chrome.runtime.sendMessage({ action: "activateSummaryButton" });
+        chrome.runtime.sendMessage({ action: "activateButtonsNotRewrite" });
+        chrome.runtime.sendMessage({ action: "initChatBot" });
     }
 }
 
@@ -99,13 +102,14 @@ async function summarizeContent(focusInput) {
     const combinedSummary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
 
     updateSummaryContent(combinedSummary);
+    loadingSpinner.remove();
+
+    await saveContentToStorage("summary", combinedSummary);
 
     statusState.stateChange("summarizing", false);
     if (!statusState.isSummarized()) statusState.setSummarized();
 
-    loadingSpinner.remove();
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    chrome.runtime.sendMessage({ action: "activateButtons" });
 }
 
 /**
@@ -123,8 +127,7 @@ async function rewriteContent(readingLevel) {
 
     statusState.stateChange("rewriting", false);
 
-    chrome.runtime.sendMessage({ action: "activateSummaryButton" });
-    chrome.runtime.sendMessage({ action: "activateRewriteButton" });
+    chrome.runtime.sendMessage({ action: "activateButtons" });
 }
 
 /**
@@ -201,9 +204,11 @@ async function analyzeContent(pageData) {
 
     const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
     updateAnalysisContent(analysis);
+    loadingSpinner.remove();
+
+    await saveContentToStorage("analysis", analysis);
 
     statusState.stateChange("analyzing", false);
-    loadingSpinner.remove();
 }
 
 /**
@@ -231,7 +236,7 @@ function updateCharacterCount() {
 /**
  * Cleans up the model when the page is unloaded.
  */
-function cleanup() {
+async function cleanup() {
     chatBot.destroyModel();
     document.removeEventListener("mouseup", updateCharacterCount);
     document.removeEventListener("keyup", updateCharacterCount);
@@ -246,8 +251,8 @@ function getCurrentStatuses() {
         initialized: chatBot.isInitialized() ? "yes" : "no",
         summarized: statusState.isSummarized() ? "yes" : "no",
         notRunning: (statusState.allNotRunning() &&
-                    !chatBot.isInitializing() &&
-                    !chatBot.isResponding()) ? "yes" : "no"
+            !chatBot.isInitializing() &&
+            !chatBot.isResponding()) ? "yes" : "no"
     };
 }
 
@@ -258,7 +263,7 @@ function getCurrentStatuses() {
 function displayErrorMessage(message) {
     const analyzeBubble = document.getElementById('analysisBubble');
     const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content');
-    
+
     let errorMessage = document.querySelector('.error-message');
     if (!errorMessage) {
         errorMessage = document.createElement('div');
@@ -272,6 +277,54 @@ function displayErrorMessage(message) {
         analyzeBoxContainer.insertBefore(errorMessage, document.getElementById('analyzeButton'));
     }
     errorMessage.innerText = message;
+}
+
+/**
+ * Saves content to Chrome's local storage along with the current timestamp.
+ * This helps to track when each entry was saved for expiration purposes.
+ * 
+ * @param {string} type - The type of content to save (e.g., "summary" or "analysis").
+ * @param {string} content - The content to save in local storage.
+ */
+async function saveContentToStorage(type, content) {
+    const url = window.location.href;
+    const key = `${url}_${type}`;
+    const data = {
+        content: content,
+        timestamp: Date.now()
+    };
+    data[key] = content;
+    await chrome.storage.local.set(data);
+}
+
+/**
+ * Retrieves content from Chrome's local storage and checks if it is expired.
+ * Returns the content only if it is less than 24 hours old.
+ * 
+ * @param {string} type - The type of content to retrieve (e.g., "summary" or "analysis").
+ * @returns {string|null} - Returns the saved content if it exists and is recent; otherwise, returns null.
+ */
+async function getContentFromStorage(type) {
+    const url = window.location.href;
+    const key = `${url}_${type}`;
+    const data = await chrome.storage.local.get(key);
+    return data[key] || null;
+}
+
+/**
+ * Loads stored summary and analysis content for the current page from Chrome's local storage.
+ * If content is found, it updates the corresponding HTML elements in the sidebar to display the stored data.
+ */
+async function loadStoredContent() {
+    const storedSummary = await getContentFromStorage("summary");
+    const storedAnalysis = await getContentFromStorage("analysis");
+
+    if (storedSummary) {
+        document.getElementById('summary').innerHTML = `<span>${storedSummary.replace(/[\*-]/g, '')}</span>`;
+    }
+    if (storedAnalysis) {
+        document.getElementById('analysis').innerHTML = `<span>${formatTextResponse(storedAnalysis)}</span>`;
+    }
 }
 
 /**
