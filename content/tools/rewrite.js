@@ -11,6 +11,7 @@ export async function generateRewrite(readingLevel, onErrorUpdate, retries = 6, 
     let attempt = 0;
     let rewriter = null;
     const elements = getHighlightedElements();
+    console.log(elements);
 
     while (attempt < retries) {
         try {
@@ -24,7 +25,6 @@ export async function generateRewrite(readingLevel, onErrorUpdate, retries = 6, 
             if (!rewriter) {
                 rewriter = await ai.languageModel.create({ systemPrompt: getRewritePrompt(readingLevel) });
             }
-            console.log(elements);
 
             // Rewrite content for each valid element and replace the original text
             for (const element of elements) {
@@ -57,6 +57,8 @@ export async function generateRewrite(readingLevel, onErrorUpdate, retries = 6, 
 
 /**
  * Retrieves HTML elements within the currently highlighted text range.
+ * Returns only the elements or nodes that intersect with the selection range.
+ * 
  * @returns {Array} Array of highlighted HTML elements.
  */
 function getHighlightedElements() {
@@ -64,39 +66,36 @@ function getHighlightedElements() {
     if (!selection.rangeCount) return [];
 
     const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer;
-    let elements = [];
+    const startContainer = range.startContainer;
+    const endContainer = range.endContainer;
+    const elements = [];
 
-    if (container.nodeType === Node.ELEMENT_NODE) {
-        // If selection is contained within a single element
-        elements.push(container);
-    } else {
-        // Traverse nodes covered by the range for multi-element selections
-        const startContainer = range.startContainer;
-        const endContainer = range.endContainer;
-
-        if (startContainer === endContainer) {
-            // Single element containing the entire selection
-            elements.push(startContainer.parentElement);
-        } else {
-            // Traverse all nodes from start to end container
-            let currentNode = startContainer;
-            while (currentNode) {
-                if (currentNode.nodeType === Node.ELEMENT_NODE) {
-                    elements.push(currentNode);
-                } else if (currentNode.nodeType === Node.TEXT_NODE && currentNode.parentElement) {
-                    elements.push(currentNode.parentElement);
-                }
-
-                if (currentNode === endContainer) break;
-                currentNode = currentNode.nextSibling;
+    function collectParentElementsInRange(node) {
+        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+            // Push the parent element of the text node if it intersects with the selection range
+            const parentElement = node.parentElement;
+            if (range.intersectsNode(node) && parentElement && !elements.includes(parentElement)) {
+                elements.push(parentElement);
             }
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'A') {
+            // Recursively check child nodes if the node is an element, excluding <a> elements
+            node.childNodes.forEach(childNode => collectParentElementsInRange(childNode));
         }
     }
 
-    // Remove duplicate elements (in case of overlapping nodes)
-    elements = Array.from(new Set(elements));
-    return elements;
+    // Start collecting parent elements within the specified range
+    if (startContainer === endContainer && startContainer.nodeType === Node.TEXT_NODE) {
+        const parentElement = startContainer.parentElement;
+        if (parentElement && parentElement.tagName !== 'A') {
+            elements.push(parentElement);
+        }
+    } else {
+        // General case for multiple elements/nodes
+        collectParentElementsInRange(range.commonAncestorContainer);
+    }
+
+    // Return unique parent elements only
+    return Array.from(new Set(elements));
 }
 
 /**
@@ -116,23 +115,53 @@ function getRewritePrompt(readingLevel) {
 /**
  * Recursively rewrites text nodes within a given element.
  * Maintains original styles and layout by rewriting only the text nodes.
+ * If the content spans multiple text nodes within child elements (e.g., <p>, <a>), 
+ * it rewrites the entire sentence seamlessly.
+ * 
  * @param {HTMLElement} element - DOM element to rewrite.
  * @param {Object} rewriter - AI model session for rewriting.
  */
 async function rewriteTextNodes(element, rewriter) {
-    const originalNodes = Array.from(element.childNodes);
+    const textNodes = [];
 
-    for (const node of originalNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            // Rewrite and replace each text node
-            const rewrittenText = await rewriter.prompt(node.textContent.trim());
-            console.log(rewrittenText);
-            const newTextNode = document.createTextNode(rewrittenText);
-            element.replaceChild(newTextNode, node);
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-            // Recursively rewrite child elements
-            await rewriteTextNodes(node, rewriter);
+    // Helper function to collect all text nodes within the element
+    function collectTextNodes(element) {
+        if (element.nodeType === Node.TEXT_NODE) {
+            textNodes.push(element);
+            return;
         }
+        for (const node of element.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                if (node.textContent.trim()) {  // Filter out nodes with only whitespace or line breaks
+                    textNodes.push(node);
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                collectTextNodes(node); // Recursive call for child elements
+            }
+        }
+    }
+
+    collectTextNodes(element);
+
+    if (textNodes.length === 0) return;  // No text nodes to rewrite, exit early
+
+    // Join the content of all text nodes to rewrite the full sentence
+    const fullText = textNodes.map(node => node.textContent).join(" ");
+
+    // Request rewrite from AI model
+    const rewrittenText = await rewriter.prompt(`Rewrite: ${fullText.trim()}`);
+
+    if (!rewrittenText) {
+        console.error("Rewriter returned no text");
+        return;
+    }
+
+    // Distribute the rewritten text back to each original text node
+    let remainingText = rewrittenText;
+    for (const node of textNodes) {
+        const nodeLength = node.textContent.length;
+        node.textContent = remainingText.slice(0, nodeLength);
+        remainingText = remainingText.slice(nodeLength);
     }
 }
 
