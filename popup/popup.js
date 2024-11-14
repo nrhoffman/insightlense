@@ -3,7 +3,6 @@ let typingInterval = null;
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
-const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
 const chatWindow = document.getElementById('chatWindow');
 const userInput = document.getElementById('chatInput');
 
@@ -16,7 +15,6 @@ const onMessageListener = (request, sender, sendResponse) => {
         case "activateButtons":
             summarizeButton.disabled = false;
             sendButton.disabled = false;
-            initChatBot();
             break;
         case "initChatBot":
             initChatBot();
@@ -133,15 +131,6 @@ chrome.windows.onRemoved.addListener(removeListeners);
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
 
-    // Ensure only one checkbox is selected at a time
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function () {
-            checkboxes.forEach(cb => {
-                if (cb !== this) cb.checked = false;
-            });
-        });
-    });
-
     // Inject necessary scripts and CSS when the popup opens
     await injectScripts(tabId);
 
@@ -205,20 +194,6 @@ async function summarizeContent() {
         console.log("Sending summarize message...");
         chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
     });
-}
-
-/**
- * Returns the selected reading level based on checkbox selection.
- */
-function getSelectedReadingLevel() {
-    const childrenCheckbox = document.getElementById('childrenLevel');
-    const collegeCheckbox = document.getElementById('collegeLevel');
-    const currentCheckbox = document.getElementById('currentLevel');
-
-    if (childrenCheckbox.checked) return `a children's reading level`;
-    if (collegeCheckbox.checked) return 'a college reading level';
-    if (currentCheckbox.checked) return `the reading level it's currently at`;
-    return '';
 }
 
 /**

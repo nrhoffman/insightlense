@@ -22,7 +22,7 @@ export async function populateBubble(type) {
     makeBubbleDraggable(bubble);
 
     // Error handling for different bubble types
-    if (type !== "defineBubble" && summaryEmpty()) {
+    if (type !== "defineBubble" && type !== "rewriteBubble" && summaryEmpty()) {
         displayError(bubble, "summary");
         return "Error";
     }
@@ -48,7 +48,6 @@ export async function populateBubble(type) {
             fillInAnalysisBubble(bubble);
             break;
         case 'rewriteBubble':
-            console.log("Here");
             fillInRewriteBubble(bubble);
             break;
     }

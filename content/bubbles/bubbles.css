@@ -114,9 +114,10 @@
 
 .checkbox-label {
   display: inline-block;
-  padding: 10px 20px;
+  padding: 6px 12px;
   border: 2px solid transparent;
-  border-radius: 25px;
+  border-radius: 15px;
+  font-size: 0.85em;
   background-color: #205e22;
   color: white;
   font-weight: bold;
@@ -135,7 +136,7 @@
 
 .custom-checkbox input[type="checkbox"]:checked + .checkbox-label {
   border-color: #f9f9f9;
-  border-width: 3px;
+  border-width: 2px;
 }
 
 /* Loading Spinner Styling */
