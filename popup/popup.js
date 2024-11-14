@@ -3,8 +3,6 @@ let typingInterval = null;
 
 const summarizeButton = document.getElementById('summarizeButton');
 const sendButton = document.getElementById('sendButton');
-const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
-const rewriteButton = document.getElementById('rewriteButton');
 const chatWindow = document.getElementById('chatWindow');
 const userInput = document.getElementById('chatInput');
 
@@ -15,13 +13,6 @@ const onMessageListener = (request, sender, sendResponse) => {
 
     switch (request.action) {
         case "activateButtons":
-            summarizeButton.disabled = false;
-            rewriteButton.disabled = false;
-            rewriteButton.textContent = "Rewrite";
-            sendButton.disabled = false;
-            initChatBot();
-            break;
-        case "activateButtonsNotRewrite":
             summarizeButton.disabled = false;
             sendButton.disabled = false;
             break;
@@ -70,8 +61,6 @@ function initChatBot() {
  */
 function setChatBotOutput(output) {
     summarizeButton.disabled = false;
-    rewriteButton.disabled = false;
-    rewriteButton.textContent = "Rewrite";
     sendButton.disabled = false;
 
     // Stop the typing indicator animation
@@ -105,7 +94,6 @@ function initializeListeners() {
 
         // Attach button event listeners
         summarizeButton.addEventListener('click', summarizeContent);
-        rewriteButton.addEventListener('click', rewriteContent);
         sendButton.addEventListener('click', sendChatMessage);
         userInput.addEventListener("keydown", function (event) {
             // Check if the key pressed is "Enter"
@@ -127,7 +115,6 @@ function removeListeners() {
     if (listenersInitialized) {
         chrome.runtime.onMessage.removeListener(onMessageListener);
         summarizeButton.removeEventListener('click', summarizeContent);
-        rewriteButton.removeEventListener('click', rewriteContent);
         sendButton.removeEventListener('click', sendChatMessage);
         listenersInitialized = false;
     }
@@ -143,15 +130,6 @@ chrome.windows.onRemoved.addListener(removeListeners);
  */
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
-
-    // Ensure only one checkbox is selected at a time
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function () {
-            checkboxes.forEach(cb => {
-                if (cb !== this) cb.checked = false;
-            });
-        });
-    });
 
     // Inject necessary scripts and CSS when the popup opens
     await injectScripts(tabId);
@@ -200,11 +178,6 @@ function updateButtonStates(status) {
         sendButton.disabled = false;
         initChatBot();
     }
-
-    if (status.summarized === "yes" && status.notRunning === "yes") {
-        rewriteButton.disabled = false;
-        rewriteButton.textContent = "Rewrite";
-    }
 }
 
 /**
@@ -216,48 +189,11 @@ async function summarizeContent() {
 
         // Disable buttons during summarization
         summarizeButton.disabled = true;
-        rewriteButton.disabled = true;
         sendButton.disabled = true;
 
         console.log("Sending summarize message...");
         chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
     });
-}
-
-/**
- * Handles the rewrite button click event, sends message to rewrite content.
- */
-async function rewriteContent() {
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-
-        // Get the selected reading level
-        const selectedReadingLevel = getSelectedReadingLevel();
-
-        // Disable buttons during rewrite
-        summarizeButton.disabled = true;
-        sendButton.disabled = true;
-        rewriteButton.disabled = true;
-
-        console.log("Sending rewrite message...");
-        chrome.tabs.sendMessage(tabs[0].id, {
-            action: "rewriteContent",
-            readingLevel: selectedReadingLevel
-        });
-    });
-}
-
-/**
- * Returns the selected reading level based on checkbox selection.
- */
-function getSelectedReadingLevel() {
-    const childrenCheckbox = document.getElementById('childrenLevel');
-    const collegeCheckbox = document.getElementById('collegeLevel');
-    const currentCheckbox = document.getElementById('currentLevel');
-
-    if (childrenCheckbox.checked) return `a children's reading level`;
-    if (collegeCheckbox.checked) return 'a college reading level';
-    if (currentCheckbox.checked) return `the reading level it's currently at`;
-    return '';
 }
 
 /**
@@ -271,7 +207,6 @@ async function sendChatMessage() {
     userInput.value = '';
     sendButton.disabled = true;
     summarizeButton.disabled = true;
-    rewriteButton.disabled = true;
 
     // Create and append user message bubble to chat window
     const userMessage = document.createElement('div');

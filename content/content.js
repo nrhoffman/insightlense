@@ -27,9 +27,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'summarizeContent':
             if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
             break;
-        case 'rewriteContent':
-            if (!statusState.isRunning("rewriting")) rewriteContent(request.readingLevel);
-            break;
         case 'getChatBotOutput':
             getChatBotOutput(request.chatInput);
             break;
@@ -41,6 +38,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'displayAnalysisBubble':
             displayBubble(request.selectedText, 'analysisBubble');
+            break;
+        case 'displayRewriteBubble':
+            displayBubble(request.selectedText, 'rewriteBubble');
             break;
         case 'getStatuses':
             sendResponse(getCurrentStatuses());
@@ -65,7 +65,7 @@ async function initializeChatBot() {
     if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
         const pageContent = await getPageContent();
         await chatBot.initializeModel(pageContent);
-        chrome.runtime.sendMessage({ action: "activateButtonsNotRewrite" });
+        chrome.runtime.sendMessage({ action: "activateButtons" });
         chrome.runtime.sendMessage({ action: "initChatBot" });
     }
 }
@@ -113,24 +113,6 @@ async function summarizeContent(focusInput) {
 }
 
 /**
- * Rewrites the page content to ensure readability at the desired level,
- * free from bias or logical fallacies. Updates the sidebar after processing.
- * @param {string} readingLevel - The target reading level for the rewrite.
- */
-async function rewriteContent(readingLevel) {
-    statusState.stateChange("rewriting", true);
-
-    const summary = document.getElementById('summary').innerText;
-    const elements = getPageContent(true);
-
-    // await generateRewrite(elements, summary, readingLevel); TODO: Finish when API is working
-
-    statusState.stateChange("rewriting", false);
-
-    chrome.runtime.sendMessage({ action: "activateButtons" });
-}
-
-/**
  * Displays a draggable bubble with the result of defining, fact-checking, or analyzing selected text.
  * @param {string} selectedText - Text selected by the user.
  * @param {string} type - Type of bubble to display (define, factCheck, or analysis).
@@ -173,15 +155,61 @@ async function displayBubble(selectedText, type) {
                 }
 
                 analyzeButton.remove();
-                document.getElementById("currentCharCount").remove();
-                document.getElementById("bubbleText").innerText = "Analysis will go to sidebar."
+                document.querySelector('.analysisBubble #currentCharCount').remove();
+                document.querySelector('.analysisBubble #bubbleText').innerText = "Analysis will go to sidebar.";
                 await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
                 analyzeContent(filteredText);
+                chrome.runtime.sendMessage({ action: "activateButtons" });
             });
             analyzeButton._listenerAdded = true;
         }
+    } else if (type === "rewriteBubble") {
+        const rewriteButton = document.getElementById('rewriteButton');
+        const rewriteBubble = document.getElementById(type);
+        const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
+        const loadingForBubble = document.getElementById('loadingContainer');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function () {
+                checkboxes.forEach(cb => {
+                    if (cb !== this) cb.checked = false;
+                });
+            });
+        });
+
+        if (!rewriteButton._listenerAdded) {
+            rewriteButton.addEventListener('click', async () => {
+                const selectedReadingLevel = getSelectedReadingLevel();
+                rewriteButton.remove();
+                document.getElementById('reading-level').remove();
+                document.querySelector('.rewriteBubble #currentCharCount').remove();
+                document.querySelector('.rewriteBubble #bubbleText').innerText = "Rewrite in progress...";
+                loadingForBubble.classList.add('active');
+
+                await rewriteContent(selectedReadingLevel);
+                loadingForBubble.remove();
+                await new Promise(r => setTimeout(r, 3000));
+
+                rewriteBubble.remove();
+                chrome.runtime.sendMessage({ action: "activateButtons" });
+            });
+            rewriteButton._listenerAdded = true;
+        }
     }
+}
+
+/**
+ * Returns the selected reading level based on checkbox selection.
+ */
+function getSelectedReadingLevel() {
+    const childrenCheckbox = document.getElementById('childrenLevel');
+    const collegeCheckbox = document.getElementById('collegeLevel');
+    const currentCheckbox = document.getElementById('currentLevel');
+
+    if (childrenCheckbox.checked) return `a children's reading level`;
+    if (collegeCheckbox.checked) return 'a college reading level';
+    if (currentCheckbox.checked) return `the reading level it's currently at`;
+    return '';
 }
 
 /**
@@ -209,6 +237,28 @@ async function analyzeContent(pageData) {
     await saveContentToStorage("analysis", analysis);
 
     statusState.stateChange("analyzing", false);
+}
+
+/**
+ * Rewrites a selected portion of content and prints it in-place in the element
+ * Uses selected reading level and removes bias, logical fallacy, and propaganda.
+ * @param {string} selectedReadingLevel - the reading level desired
+ */
+async function rewriteContent(selectedReadingLevel) {
+    statusState.stateChange("rewriting", true);
+    const summary = document.getElementById('summary').innerText;
+    const rewriteBubbleText = document.querySelector('.rewriteBubble #bubbleText');
+
+    const updateRewriteBubble = (content) => {
+        rewriteBubbleText.innerHTML = `<span>${formatTextResponse(content)}</span>`;
+    };
+
+    const onRewriteErrorUpdate = (errorMessage) => updateRewriteBubble(errorMessage);
+
+    const result = await generateRewrite(selectedReadingLevel, onRewriteErrorUpdate);
+    updateRewriteBubble(result);
+
+    statusState.stateChange("rewriting", false);
 }
 
 /**
@@ -289,11 +339,16 @@ function displayErrorMessage(message) {
 async function saveContentToStorage(type, content) {
     const url = window.location.href;
     const key = `${url}_${type}`;
+
+    // Create a structured data object for the content and timestamp
     const data = {
-        content: content,
-        timestamp: Date.now()
+        [key]: {
+            content: content,
+            timestamp: Date.now()
+        }
     };
-    data[key] = content;
+
+    // Save the structured object to local storage
     await chrome.storage.local.set(data);
 }
 
@@ -308,7 +363,21 @@ async function getContentFromStorage(type) {
     const url = window.location.href;
     const key = `${url}_${type}`;
     const data = await chrome.storage.local.get(key);
-    return data[key] || null;
+
+    // Check if the data exists and if the timestamp is within the last 24 hours
+    if (data[key]) {
+        const { content, timestamp } = data[key];
+        const currentTime = Date.now();
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+        // If the timestamp is less than 24 hours old, return the content
+        if (currentTime - timestamp <= ONE_DAY_MS) {
+            return content;
+        }
+    }
+
+    // Return null if content is expired or not available
+    return null;
 }
 
 /**

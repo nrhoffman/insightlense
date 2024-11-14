@@ -1,7 +1,12 @@
-const ONE_DAY_MS = 12 * 60 * 60 * 1000;
+const REMOVE_SCHEDULE_MS = 12 * 60 * 60 * 1000;
 
-setInterval(clearExpiredStorage, ONE_DAY_MS);
+setInterval(clearExpiredStorage, REMOVE_SCHEDULE_MS);
 clearExpiredStorage();
+
+// To retrieve all keys and values in local storage
+chrome.storage.local.get(null, (result) => {
+    console.log("Current Local Storage:", result);
+});
 
 // Listener for Chrome extension installation event. Creates context menu options when the extension is installed.
 chrome.runtime.onInstalled.addListener(() => {
@@ -15,6 +20,7 @@ function createContextMenus() {
     createContextMenuItem("define", "Define");
     createContextMenuItem("factCheck", "Fact-Check");
     createContextMenuItem("analyze", "Analyze");
+    createContextMenuItem("rewrite", "Rewrite")
 }
 
 /**
@@ -72,7 +78,8 @@ function handleContextMenuAction(info, tab) {
     const actionMap = {
         "define": "displayDefineBubble",
         "factCheck": "displayFactCheckBubble",
-        "analyze": "displayAnalysisBubble"
+        "analyze": "displayAnalysisBubble",
+        "rewrite": "displayRewriteBubble"
     };
 
     const action = actionMap[info.menuItemId];
@@ -98,10 +105,10 @@ async function clearExpiredStorage() {
     const currentTime = Date.now();
 
     for (const key in allData) {
-        const { timestamp } = allData[key];
-
-        // Remove items older than 24 hours
-        if (timestamp && (currentTime - timestamp) > ONE_DAY_MS) {
+        const storedItem = allData[key];
+        
+        // Check if the item has a timestamp and remove if older than 24 hours
+        if (storedItem.timestamp && (currentTime - storedItem.timestamp) > REMOVE_SCHEDULE_MS) {
             await chrome.storage.local.remove(key);
         }
     }
@@ -109,7 +116,7 @@ async function clearExpiredStorage() {
     // Clear expired messages within 'chatConversation'
     if (allData.chatConversation) {
         const recentMessages = allData.chatConversation.filter(
-            message => message.timestamp && (currentTime - message.timestamp) <= ONE_DAY_MS
+            message => message.timestamp && (currentTime - message.timestamp) <= REMOVE_SCHEDULE_MS
         );
 
         // Update 'chatConversation' in storage only if there are changes

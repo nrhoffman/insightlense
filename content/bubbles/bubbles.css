@@ -1,7 +1,8 @@
 /* Bubble Styling */
 #defineBubble,
 #factCheckBubble,
-#analysisBubble {
+#analysisBubble,
+#rewriteBubble {
     position: absolute;
     background-color: rgba(20, 20, 20, 0.95);
     border: 1px 1px solid #444;
@@ -14,6 +15,10 @@
     cursor: pointer;
     transition: opacity 0.2s;
     display: block;
+}
+
+#rewriteBubble{
+  max-width: 300px;
 }
 
 .bubble-title {
@@ -45,7 +50,8 @@
 }
 
 /* Analyze Button Styling */
-#analyzeButton {
+#analyzeButton,
+#rewriteButton {
     width: 100%;
     padding: 10px;
     border: none;
@@ -60,12 +66,107 @@
     text-align: center; 
   }
 
-#analyzeButton:hover {
+#analyzeButton:hover,
+#rewriteButton:hover {
   background-color: #205e10;
   transform: scale(1.02);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-#analyzeButton:focus{
+#analyzeButton:focus,
+#rewriteButton {
   outline: 2px solid #205e22;
+}
+
+/* Rewrite Text*/
+#reading-level{
+  color: #f9f9f9;
+  font-size: 1em;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.checkbox-text {
+  margin-bottom: 5px;
+}
+
+/* Rewrite Boxes*/
+.checkbox-container {
+  justify-content: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 5px;
+  width: 100%;
+}
+
+.custom-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.custom-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-label {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 2px solid transparent;
+  border-radius: 15px;
+  font-size: 0.85em;
+  background-color: #205e22;
+  color: white;
+  font-weight: bold;
+  transition: border-color 0.3s ease, color 0.3s ease;
+}
+
+.checkbox-label:hover{
+  background-color: #205e10;
+  transform: scale(1.02);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.checkbox-label:focus {
+  outline: 2px solid #205e22;
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkbox-label {
+  border-color: #f9f9f9;
+  border-width: 2px;
+}
+
+/* Loading Spinner Styling */
+.loading-spinner-container {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  height: 50px;
+  margin-top: 10px;
+}
+
+.loading-spinner-container.active {
+  display: flex;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 4px solid #444;
+  border-top: 4px solid #205e22;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
