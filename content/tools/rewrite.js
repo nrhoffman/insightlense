@@ -124,19 +124,16 @@ function getRewritePrompt(readingLevel) {
 async function rewriteTextNodes(element, rewriter) {
     const textNodes = [];
 
-    // Helper function to collect all text nodes within the element
+    // Helper function to collect only valid text nodes within the element
     function collectTextNodes(element) {
-        if (element.nodeType === Node.TEXT_NODE) {
+        // If the element is a text node and contains actual text (not just whitespace)
+        if (element.nodeType === Node.TEXT_NODE && element.textContent.trim()) {
             textNodes.push(element);
-            return;
-        }
-        for (const node of element.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                if (node.textContent.trim()) {  // Filter out nodes with only whitespace or line breaks
-                    textNodes.push(node);
-                }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                collectTextNodes(node); // Recursive call for child elements
+        } else if (element.nodeType === Node.ELEMENT_NODE) {
+            // If it's an element, recursively check child nodes, but skip the parent element itself
+            for (const node of element.childNodes) {
+                // Only collect text nodes, not the parent elements of text nodes
+                collectTextNodes(node);
             }
         }
     }
