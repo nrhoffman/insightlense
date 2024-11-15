@@ -3,6 +3,8 @@
 The InsightLense Chrome Extension is your own personal AI web assistant that has your safe consumption of knowledge
 as it's top priority.
 
+To Start: Ctrl+Q
+
 It can provide:
 
 1) Summarization of page content - Just click the summarize button in the sidebar

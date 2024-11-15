@@ -21,12 +21,6 @@ export async function populateBubble(type) {
     bubble.addEventListener("dblclick", () => bubble.remove(), { once: true });
     makeBubbleDraggable(bubble);
 
-    // Error handling for different bubble types
-    if (type !== "defineBubble" && type !== "rewriteBubble" && summaryEmpty()) {
-        displayError(bubble, "summary");
-        return "Error";
-    }
-
     if (type === "defineBubble" && selectedText.length > 100) {
         displayError(bubble, "define");
         return "Error";
@@ -91,9 +85,6 @@ function displayError(bubble, type) {
 
     let message = "";
     switch (type) {
-        case "summary":
-            message = "Wait until summary generation completes.";
-            break;
         case "define":
             message = "Intention for define is for words and phrases less than 100 characters.";
             break;
@@ -154,16 +145,6 @@ function bubbleDragging(e, bubble, offsetX, offsetY, isDragging) {
 
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
-}
-
-/**
- * Checks if a summary has been generated and returns the status.
- * @returns {boolean} - True if the summary is empty, false otherwise.
- */
-function summaryEmpty() {
-    const summary = document.getElementById('summary');
-    return (summary.innerText === "Open the popup, optionally enter a focus, and click summarize." || 
-            summary.innerText === "");
 }
 
 /**
