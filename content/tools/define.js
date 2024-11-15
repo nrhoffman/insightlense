@@ -40,7 +40,7 @@ export async function define(selectedText, onErrorUpdate, retries = 6, delay = 1
             }
 
             // Log error for debugging purposes
-            console.error(`Error defining content on attempt ${attempt + 1}:`, error);
+            console.warn(`Error defining content on attempt ${attempt + 1}:`, error);
 
             // Increment retry attempt and apply exponential backoff
             attempt++;

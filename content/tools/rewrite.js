@@ -39,7 +39,7 @@ export async function generateRewrite(readingLevel, onErrorUpdate, retries = 6, 
             if (onErrorUpdate) {
                 onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}`);
             }
-            console.error(`Error during rewrite attempt ${attempt + 1}:`, error);
+            console.warn(`Error during rewrite attempt ${attempt + 1}:`, error);
 
             // Increment retry attempt and apply exponential backoff
             attempt++;

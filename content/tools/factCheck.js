@@ -36,7 +36,7 @@ export async function factCheck(selectedText, onErrorUpdate, retries = 6, delay 
                 onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}`);
             }
 
-            console.error(`Error fact-checking content on attempt ${attempt + 1}:`, error);
+            console.warn(`Error fact-checking content on attempt ${attempt + 1}:`, error);
             attempt++;
 
             // Retry with exponential backoff

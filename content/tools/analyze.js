@@ -37,7 +37,7 @@ export async function generateAnalysis(selectedText, onErrorUpdate, retries = 6,
             }
 
             // Log error for debugging purposes
-            console.error(`Error on attempt ${attempt + 1}: ${error.message}`);
+            console.warn(`Error on attempt ${attempt + 1}: ${error.message}`);
 
             // Increment retry attempt and apply exponential backoff
             attempt++;

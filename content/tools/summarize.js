@@ -151,11 +151,10 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3,
                 onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}\n`);
             }
 
-            console.error(`Error summarizing content on attempt ${attempt + 1}:`, error);
+            console.warn(`Error summarizing content on attempt ${attempt + 1}:`, error);
             attempt++;
             if (attempt < retries) {
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await handleRetry(delay);
                 delay *= 2; // Exponential backoff
             } else {
                 console.log("Max retries reached. Returning empty summary.");
@@ -193,4 +192,14 @@ function getSummaryContext(focusInput, maxChar) {
     return `You must keep under ${maxChar} characters.
             Mention the domain: ${domain}.
             Focus the summary on: "${focusInput}" if not blank.`;
+}
+
+/**
+ * Handles retry logic, including exponential backoff.
+ * 
+ * @param {number} delay - The current delay in milliseconds before the next retry.
+ */
+async function handleRetry(delay) {
+    console.log(`Retrying in ${delay}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
 }
