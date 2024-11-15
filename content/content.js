@@ -13,13 +13,11 @@ console.log("Content script loaded");
 
 const statusState = new StatusStateMachine();
 const chatBot = new ChatBot();
+initializeChatBot();
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
-        case "initializeModel":
-            initializeChatBot();
-            break;
         case "showSidebar":
             createSidebar();
             loadStoredContent();

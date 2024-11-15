@@ -137,11 +137,6 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     // Send message to check status and initialize model if needed
     const status = await checkStatus(tabId);
 
-    // Initialize listeners if the model isn't running or initialized
-    if (status.notRunning === "yes" && status.initialized === "no") {
-        chrome.tabs.sendMessage(tabId, { action: "initializeModel", tabId: tabId });
-    }
-
     // Update button states based on model status
     updateButtonStates(status);
 
