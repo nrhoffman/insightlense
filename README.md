@@ -7,22 +7,22 @@ To Start: Ctrl+Q
 
 It can provide:
 
-1) Summarization of page content - Just click the summarize button in the sidebar
+1) Summarization of page content - Just click the summarize button in the popup.
 
-2) Chat Bot - Ask any questions you may have, specifically about the page content - or anything else!
+2) Chat Bot - In the popup, ask it any questions you may have, specifically about the page content - or anything else!
 
 The below features can be found in the right click options under the InsightLense menu.
 
-3) Define - You can right click on highlighted text and define words or phrases.
+3) Define - Right click on highlighted text, and click Define to receive an explanation on the selected word or phrase.
 
-4) Fact Check - After summarizing, you can right click on highlighted text and fact check.
+4) Fact Check - Right click on highlighted text, and Fact-Check to receive a fact check for the selected statement.
 
-5) Analyze - After summarizing, you can right click on highlighted text and analyze the content for various attributes,
-   logical falacies, ulterior motives, and an overall analysis of the text. Be aware of propagandists, shady marketers,
+5) Analyze - Right click on highlighted text, and analyze the content for various attributes, logical falacies,
+   ulterior motives, and an overall analysis of the text. Be aware of propagandists, shady marketers,
    and other possible malicious content.
 
-6) Rewrite - After summarizing, you can right click on highlighted text and have it rewritten removing bias, logical fallacy,
-and propaganda. Additionally, there's an option to have the rewritten content be at a children's or college reading level.
+6) Rewrite - Right click on highlighted text, and have it rewritten removing bias, logical fallacy, and 
+   propaganda. Additionally, there's an option to have the rewritten content be at a children's or college reading level.
 
 
 Limitations:
