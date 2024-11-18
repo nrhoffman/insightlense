@@ -18,9 +18,7 @@ export async function getPageContent() {
         })
         
         const mainTemp = await extractContentElements(mainElements);
-        console.log(mainTemp);
         const contentFiltered = await filterContentElements(mainTemp);
-        console.log(contentFiltered);
         const contentClean = await cleanContentText(contentFiltered);
         const uniqueContent = Array.from(new Set(contentClean));
         const stringContent = uniqueContent.join('\n');

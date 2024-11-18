@@ -12,9 +12,44 @@ export async function populateBubble(type) {
         bubble = createBubble(type);
     }
 
-    const selection = window.getSelection();
-    const selectedText = selection.toString();
-    const range = selection.getRangeAt(0).getBoundingClientRect();
+    let selection = window.getSelection();
+    let selectedText, range;
+
+    if (selection && selection.rangeCount > 0) {
+        selectedText = selection.toString();
+        range = selection.getRangeAt(0).getBoundingClientRect();
+    }
+    else {
+        const iframes = document.querySelectorAll('iframe');
+
+        for (let iframe of iframes) {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            try {
+                selection = iframeDoc.getSelection();
+
+                if (selection && selection.rangeCount > 0) {
+                    range = selection.getRangeAt(0).getBoundingClientRect();
+                    selectedText = selection.toString();
+
+                    if (selectedText) {
+                        const iframeRect = iframe.getBoundingClientRect();
+
+                        const rangeTemp = {
+                            top: range.top + iframeRect.top,
+                            left: range.left + iframeRect.left,
+                            width: range.width,
+                            height: range.height,
+                        };
+                        range = rangeTemp;
+                        console.log("test");
+                        break;
+                    }
+                }
+            } catch (error) { 
+                console.error("Error accessing iframe:", error);
+            }
+        }
+    }
 
     positionBubble(bubble, range);
 
