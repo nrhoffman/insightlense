@@ -1,10 +1,13 @@
 import ChatBot from './utilities/chatBot.js';
+import { clearExpiredStorage } from './utilities/clearExpiredStorage.js'
 import ExtensionState from './utilities/extensionState.js'
+import { formatTextResponse } from './utilities/formatTextResponse.js';
 import { generateDefinition } from './tools/define.js';
 import { generateFactCheck } from './tools/factCheck.js';
 import { generateAnalysis } from './tools/analyze.js';
 import { generateSummary } from './tools/summarize.js';
 import { generateRewrite } from './tools/rewrite.js';
+import { handleContextMenuAction } from './utilities/handleContextMenuAction.js'
 import StatusStateMachine from './utilities/statusStateMachine.js';
 
 console.log("Background worker started!");
@@ -15,7 +18,7 @@ const REMOVE_SCHEDULE_MS = 12 * 60 * 60 * 1000; // Interval to clear expired sto
 const extensionState = new ExtensionState();
 
 setInterval(clearExpiredStorage, REMOVE_SCHEDULE_MS); // Periodic storage cleanup
-clearExpiredStorage(); // Initial cleanup on startup
+clearExpiredStorage(REMOVE_SCHEDULE_MS); // Initial cleanup on startup
 
 // Event listener for extension installation
 chrome.runtime.onInstalled.addListener(() => {
@@ -284,64 +287,4 @@ async function injectScriptsAndStyles(tabId) {
     } catch (error) {
         console.error("Error injecting styles:", error);
     }
-}
-
-/**
- * Handles the specific action based on the clicked context menu item.
- * 
- * @param {Object} info - Information about the clicked menu item and selection.
- * @param {Object} tab - Details of the active tab.
- */
-function handleContextMenuAction(info, tab) {
-    const actions = {
-        define: "displayDefineBubble",
-        factCheck: "displayFactCheckBubble",
-        analyze: "displayAnalysisBubble",
-        rewrite: "displayRewriteBubble"
-    };
-
-    const action = actions[info.menuItemId];
-    if (action && info.selectionText) {
-        chrome.tabs.sendMessage(tab.id, { action, selectedText: info.selectionText });
-    }
-}
-
-/**
- * Periodically clears expired items from local storage.
- */
-async function clearExpiredStorage() {
-    const allData = await chrome.storage.local.get();
-    const currentTime = Date.now();
-
-    for (const key in allData) {
-        const item = allData[key];
-        if (item.timestamp && currentTime - item.timestamp > REMOVE_SCHEDULE_MS) {
-            await chrome.storage.local.remove(key);
-        }
-    }
-
-    // Clean up expired messages in 'chatConversation'
-    if (allData.chatConversation) {
-        const recentMessages = allData.chatConversation.filter(
-            msg => msg.timestamp && currentTime - msg.timestamp <= REMOVE_SCHEDULE_MS
-        );
-        if (recentMessages.length !== allData.chatConversation.length) {
-            await chrome.storage.local.set({ chatConversation: recentMessages });
-        }
-    }
-}
-
-/**
- * Formats the ChatBot's text response into HTML.
- * 
- * @param {string} response - The raw response text.
- * @returns {string} - The formatted HTML string.
- */
-function formatTextResponse(response) {
-    return response
-        .replace(/## (.*?)(?=\n|$)/g, "") // Remove headers
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Bold text
-        .replace(/^\s*\*\s+/gm, "• ") // Bullets
-        .replace(/\*(.*?)\*/g, "<em>$1</em>") // Italicize
-        .replace(/\n/g, "<br>"); // Line breaks
 }

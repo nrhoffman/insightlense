@@ -1,6 +1,7 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
+import { formatTextResponse } from '../utilities/formatTextResponse.js';
 import { generateRewrite } from './tools/rewrite.js';
-import { getPageContent } from './utilities/getPageContent.js';
+import { getPageContent } from '../utilities/getPageContent.js';
 import { populateBubble } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
@@ -373,21 +374,6 @@ async function loadStoredContent() {
         analysis.innerHTML = `<span>${formatTextResponse(storedAnalysis)}</span>`;
     }
 }
-
-/**
- * Formats the text response from the model, adding HTML tags for emphasis, bullets, etc.
- * @param {string} response - The raw response text from the model.
- * @returns {string} - The formatted HTML string.
- */
-function formatTextResponse(response) {
-    let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
-    htmlData = htmlData.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-    htmlData = htmlData.replace(/^\s*\*\s+/gm, "• ");
-    htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
-    htmlData = htmlData.replace(/\n/g, "<br>");
-    return htmlData;
-}
-
 
 /**
  * Cleans up the model when the page is unloaded.
