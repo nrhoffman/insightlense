@@ -182,15 +182,13 @@ async function createSummarizerSession(focusInput, maxChar = 4000, finalSummary 
 }
 
 /**
- * Constructs the context string for the summarizer model, incorporating the focus input and domain.
+ * Constructs the context string for the summarizer model, incorporating the focus input.
  *
  * @param {string} focusInput - Specific topic or focus area for the summary.
  * @returns {string} The customized context string for summarization.
  */
 function getSummaryContext(focusInput, maxChar) {
-    const domain = window.location.hostname;
     return `You must keep under ${maxChar} characters.
-            Mention the domain: ${domain}.
             Focus the summary on: "${focusInput}" if not blank.`;
 }
 

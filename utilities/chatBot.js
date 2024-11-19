@@ -1,8 +1,10 @@
 class ChatBot {
-    constructor() {
+    
+    constructor(url) {
         this.initialized = false; // Indicates if the model has been initialized
         this.initializing = false; // Indicates if the model is currently initializing
         this.responding = false;
+        this.pageUrl = url;
         this.modelInstance = null; // Holds the instance of the language model
     }
 

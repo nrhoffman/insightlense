@@ -1,27 +1,14 @@
 // Function that fetches the web page content by selecting relevant elements and processing them.
 export async function getPageContent() {
-    try {
-        let mainElements = document.querySelectorAll('article, main, section, div, iframe');
+    let mainElements = document.querySelectorAll('article, main, section, div, iframe');
 
-        //In case of iframes
-        mainElements = Array.from(mainElements).flatMap(element => {
-            if (element.tagName.toLowerCase() === 'iframe') {
-                try {
-                    const iframeDoc = element.contentDocument || element.contentWindow.document;
-                    return Array.from(iframeDoc.querySelectorAll('article, main, section, div'));
-                } catch (error) {
-                    console.warn("Skipping iframe due to possible security restrictions.");
-                    return [];
-                }
-            }
-            return element;
-        })
-        
+    try {
         const mainTemp = await extractContentElements(mainElements);
         const contentFiltered = await filterContentElements(mainTemp);
         const contentClean = await cleanContentText(contentFiltered);
         const uniqueContent = Array.from(new Set(contentClean));
         const stringContent = uniqueContent.join('\n');
+
         return stringContent;
     } catch (error) {
         console.error("Error fetching page content:", error);

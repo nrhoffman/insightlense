@@ -8,55 +8,70 @@ const userInput = document.getElementById('chatInput');
 
 /**
  * Message listener function to handle sidebar communication with the content script.
+ * This function listens for specific actions from the content script and updates the UI accordingly.
  */
 const onMessageListener = (request, sender, sendResponse) => {
-
     switch (request.action) {
         case "activateButtons":
+            // Enable the summarize and send buttons
             summarizeButton.disabled = false;
             sendButton.disabled = false;
             break;
-        case "initChatBot":
-            initChatBot();
+        case "initChatWindow":
+            // Initialize chat window when requested
+            initChatWindow();
+            break;
+        case "sendStatus":
+            // Update button states based on the current model status
+            updateButtonStates(request.status);
             break;
         case "setChatBotOutput":
+            // Display the chatbot's response in the chat window
             setChatBotOutput(request.output);
             break;
     }
 };
 
 /**
- * Initialize Chat Bot button and window
+ * Initializes the chat window, retrieves previous conversation from storage, 
+ * and displays it. If no conversation exists, shows a default bot message.
  */
-function initChatBot() {
-    chatWindow.innerHTML = '';
+function initChatWindow() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const url = tabs[0].url; // Get the current tab's URL
+        
+        // Retrieve the saved conversation for the current URL
+        chrome.storage.local.get([url], (result) => {
+            const messages = result[url] || [];
 
-    // Retrieve saved conversation from storage
-    chrome.storage.local.get(['chatConversation'], (result) => {
-        const messages = result.chatConversation || [];
+            // Clear the chat window
+            chatWindow.innerHTML = '';
 
-        // Add each message to the chat window
-        messages.forEach(msg => {
-            const messageElem = document.createElement('div');
-            messageElem.className = msg.className;
-            messageElem.textContent = msg.text;
-            chatWindow.appendChild(messageElem);
+            // Add each message to the chat window
+            messages.forEach(msg => {
+                const messageElem = document.createElement('div');
+                messageElem.className = msg.className;
+                messageElem.textContent = msg.text;
+                chatWindow.appendChild(messageElem);
+            });
+
+            // Append a starting bot message if chat is empty
+            if (messages.length === 0) {
+                const botMessage = document.createElement('div');
+                botMessage.className = 'bot-message';
+                botMessage.textContent = "I'm ready for any questions.";
+                chatWindow.appendChild(botMessage);
+            }
+
+            // Scroll to the bottom of the chat window
+            chatWindow.scrollTop = chatWindow.scrollHeight;
         });
-
-        // Append a starting bot message if chat is empty
-        if (messages.length === 0) {
-            const botMessage = document.createElement('div');
-            botMessage.className = 'bot-message';
-            botMessage.textContent = "I'm ready for any questions.";
-            chatWindow.appendChild(botMessage);
-        }
-
-        chatWindow.scrollTop = chatWindow.scrollHeight;
     });
 }
 
 /**
- * Updates the chat window with chatbot output and scrolls to the bottom.
+ * Updates the chat window with the chatbot output and scrolls to the bottom.
+ * This is called when a response is received from the chatbot.
  * @param {string} output - The chatbot's response text.
  */
 function setChatBotOutput(output) {
@@ -81,11 +96,12 @@ function setChatBotOutput(output) {
     chatWindow.appendChild(botMessage);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
+    // Save the conversation to storage
     saveConversation(botMessage);
 }
 
 /**
- * Initializes the message listeners and button event listeners only once.
+ * Initializes message listeners and button event listeners only once to avoid duplicates.
  */
 function initializeListeners() {
     if (!listenersInitialized) {
@@ -109,7 +125,7 @@ function initializeListeners() {
 }
 
 /**
- * Remove all message and button listeners to prevent memory leaks.
+ * Removes all message and button listeners to prevent memory leaks.
  */
 function removeListeners() {
     if (listenersInitialized) {
@@ -126,57 +142,35 @@ function removeListeners() {
 chrome.windows.onRemoved.addListener(removeListeners);
 
 /**
- * Runs when the popup window is opened and initializes content and message listeners.
+ * Runs when the popup window is opened, initializes content, message listeners, and checks model status.
  */
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
+    const url = tabs[0].url;
 
     // Inject necessary scripts and CSS when the popup opens
-    await injectScripts(tabId);
+    chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
 
     // Send message to check status and initialize model if needed
-    const status = await checkStatus(tabId);
-
-    // Update button states based on model status
-    updateButtonStates(status);
+    chrome.runtime.sendMessage({ action: "getStatuses", tabId: tabId, url: url });
 
     // Initialize listeners after setup
     initializeListeners();
 });
 
 /**
- * Injects the CSS into the active tab.
- */
-async function injectScripts(tabId) {
-    await chrome.scripting.insertCSS({
-        target: { tabId: tabId },
-        files: ["./content/sidebar/sidebar.css"]
-    });
-
-    chrome.tabs.sendMessage(tabId, { action: "showSidebar", tabId: tabId });
-}
-
-/**
- * Check the current status of the tab to determine which actions to take.
- */
-async function checkStatus(tabId) {
-    return chrome.tabs.sendMessage(tabId, { action: "getStatuses", tabId: tabId });
-}
-
-/**
- * Update button states based on the current status of the model.
+ * Updates button states based on the current status of the model (e.g., whether it's initialized or running).
  */
 function updateButtonStates(status) {
-
     if (status.notRunning === "yes" && status.initialized === "yes") {
         summarizeButton.disabled = false;
         sendButton.disabled = false;
-        initChatBot();
+        initChatWindow();
     }
 }
 
 /**
- * Handles the summarize button click event, sends message to summarize content.
+ * Handles the summarize button click event, sends message to summarize content on the active tab.
  */
 async function summarizeContent() {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
@@ -187,12 +181,12 @@ async function summarizeContent() {
         sendButton.disabled = true;
 
         console.log("Sending summarize message...");
-        chrome.tabs.sendMessage(tabs[0].id, { action: "summarizeContent", focusInput: userInput.value });
+        chrome.tabs.sendMessage(tabs[0].id, { action: "startingSummary", tabId: tabs[0].id, focusInput: userInput.value });
     });
 }
 
 /**
- * Handles the send button click event, sends user input to the chatbot.
+ * Handles the send button click event, sends the user's input to the chatbot for processing.
  */
 async function sendChatMessage() {
     const input = userInput.value.trim();
@@ -203,7 +197,7 @@ async function sendChatMessage() {
     sendButton.disabled = true;
     summarizeButton.disabled = true;
 
-    // Create and append user message bubble to chat window
+    // Create and append user message bubble to the chat window
     const userMessage = document.createElement('div');
     userMessage.className = 'user-message';
     userMessage.textContent = input;
@@ -229,7 +223,7 @@ async function sendChatMessage() {
 
     // Send the input message to the background script or content script for chatbot processing
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "getChatBotOutput", chatInput: input });
+        chrome.runtime.sendMessage({ action: "getChatBotOutput", tabId: tabs[0].id, chatInput: input });
     });
 }
 
@@ -260,29 +254,33 @@ function clearTypingIndicatorAnimation() {
 /**
  * Appends the new message to the existing conversation array in Chrome's local storage,
  * ensuring that no more than 50 messages are stored.
+ * @param {HTMLElement} messageElem - The message element to be saved.
  */
 function saveConversation(messageElem) {
-    // Retrieve the existing conversation from storage
-    chrome.storage.local.get(['chatConversation'], (result) => {
-        // If there are existing messages, append the new one; otherwise, create a new array
-        const messages = result.chatConversation || [];
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const url = tabs[0].url; // Get the current tab's URL
+        
+        // Retrieve the existing conversation for the current URL from storage
+        chrome.storage.local.get([url], (result) => {
+            const messages = result[url] || [];
 
-        // Create the new message object
-        const newMessage = {
-            text: messageElem.textContent,
-            className: messageElem.className,
-            timestamp: Date.now()
-        };
+            // Create the new message object
+            const newMessage = {
+                text: messageElem.textContent,
+                className: messageElem.className,
+                timestamp: Date.now()
+            };
 
-        // Append the new message to the array
-        messages.push(newMessage);
+            // Append the new message to the array
+            messages.push(newMessage);
 
-        // If there are more than 50 messages, remove the oldest one (FIFO)
-        if (messages.length > 25) {
-            messages.shift(); // Remove the first element (oldest message)
-        }
+            // If there are more than 50 messages, remove the oldest one (FIFO)
+            if (messages.length > 50) {
+                messages.shift(); // Remove the first element (oldest message)
+            }
 
-        // Save the updated conversation array back to local storage
-        chrome.storage.local.set({ chatConversation: messages });
+            // Save the updated conversation back to local storage under the URL key
+            chrome.storage.local.set({ [url]: messages });
+        });
     });
 }
