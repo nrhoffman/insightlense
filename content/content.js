@@ -1,12 +1,13 @@
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
 import { formatTextResponse } from '../utilities/formatTextResponse.js';
-import { generateRewrite } from './tools/rewrite.js';
+import { generateRewrite } from '../tools/rewrite.js';
 import { getPageContent } from '../utilities/getPageContent.js';
 import { populateBubble } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await new Promise(r => setTimeout(r, 3000));
     sendChatbotInitMsg();
 });
 
@@ -70,7 +71,7 @@ window.onbeforeunload = async function () {
  */
 async function sendChatbotInitMsg() {
     const pageContent = await getPageContent();
-    chrome.runtime.sendMessage({ action: "initChatbot", pageContent: pageContent });
+    chrome.runtime.sendMessage({ action: "initExtension", pageContent: pageContent });
 }
 
 /**
@@ -136,7 +137,6 @@ async function displayBubble(selectedText, type) {
                 await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
                 analyzeContent(filteredText);
-                chrome.runtime.sendMessage({ action: "activateButtons" });
             });
             analyzeButton._listenerAdded = true;
         }
@@ -248,7 +248,7 @@ async function updateGeneratedFcOrDefine(type, content){
  * @param {string} selectedReadingLevel - the reading level desired
  */
 async function rewriteContent(selectedReadingLevel) {
-    statusState.stateChange("rewriting", true);
+    chrome.runtime.sendMessage({ action: "startRewriting" });
     const rewriteBubbleText = document.querySelector('.rewriteBubble #bubbleText');
 
     const updateRewriteBubble = (content) => {
@@ -260,7 +260,7 @@ async function rewriteContent(selectedReadingLevel) {
     const result = await generateRewrite(selectedReadingLevel, onRewriteErrorUpdate);
     updateRewriteBubble(result);
 
-    statusState.stateChange("rewriting", false);
+    chrome.runtime.sendMessage({ action: "stopRewriting" });
 }
 
 /**

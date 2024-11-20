@@ -1,14 +1,13 @@
 import ChatBot from './utilities/chatBot.js';
 import { clearExpiredStorage } from './utilities/clearExpiredStorage.js'
-import ExtensionState from './utilities/extensionState.js'
+import ExtensionState from './state/extensionState.js'
 import { formatTextResponse } from './utilities/formatTextResponse.js';
 import { generateDefinition } from './tools/define.js';
 import { generateFactCheck } from './tools/factCheck.js';
 import { generateAnalysis } from './tools/analyze.js';
 import { generateSummary } from './tools/summarize.js';
-import { generateRewrite } from './tools/rewrite.js';
 import { handleContextMenuAction } from './utilities/handleContextMenuAction.js'
-import StatusStateMachine from './utilities/statusStateMachine.js';
+import StatusStateMachine from './state/statusStateMachine.js';
 
 console.log("Background worker started!");
 
@@ -45,17 +44,27 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     try {
         let normalizedUrl;
+        let tabId;
         switch (request.action) {
-            case 'initChatbot':
-                normalizedUrl = new URL(sender.tab.url).origin;
-                await initializeChatbot(sender.tab.id, request.pageContent, normalizedUrl);
-                chrome.runtime.sendMessage({ action: "initChatWindow" });
-                chrome.runtime.sendMessage({ action: "activateButtons" });
-                await injectScriptsAndStyles(sender.tab.id); // Ensure content scripts/styles are injected
-                chrome.tabs.sendMessage(sender.tab.id, { action: "showSidebar" });
+            case 'initExtension':
+                tabId = sender.tab.id;
+                normalizedUrl = new URL(sender.tab.url);
+                await initializeExtension(tabId, request.pageContent, normalizedUrl);
+                chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                    }
+                });
+                chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                    }
+                });
+                await injectScriptsAndStyles(tabId); // Ensure content scripts/styles are injected
+                chrome.tabs.sendMessage(tabId, { action: "showSidebar" });
                 break;
             case 'getStatuses':
-                normalizedUrl = new URL(request.url).origin;
+                normalizedUrl = new URL(request.url);
                 const statusToSend = await getCurrentStatuses(request.tabId, normalizedUrl);
                 chrome.runtime.sendMessage({ action: "sendStatus", status: statusToSend });
                 break;
@@ -63,7 +72,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 if (!extensionState.getStatus(request.tabId).isRunning("summarizing")) {
                     const generatedSummary = await summarizeContent(request.tabId, request.focusInput, request.pageContent);
                     chrome.tabs.sendMessage(request.tabId, { action: "sendGeneratedSummary", summary: generatedSummary });
-                    chrome.runtime.sendMessage({ action: "activateButtons" });
+                    chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                        }
+                    });
                 }
                 break;
             case 'getChatBotOutput':
@@ -71,32 +84,51 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 chrome.runtime.sendMessage({ action: "setChatBotOutput", output: outputToSend });
                 break;
             case 'analyzeContent':
-                chrome.tabs.query({ active:true, currentWindow: true }, async (tabs) => {
-                    const tabId = tabs[0].id;
-                    if (!extensionState.getStatus(tabId).isRunning("analyzing")) {
-                            const generatedAnalysis= await analyzeContent(tabId, request.pageContent, request.summary);
-                            chrome.tabs.sendMessage(tabId, { action: "sendGeneratedAnalysis", analysis: generatedAnalysis });
-                            chrome.runtime.sendMessage({ action: "activateButtons" });
-                    }
-                });
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("analyzing")) {
+                        const generatedAnalysis= await analyzeContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedAnalysis", analysis: generatedAnalysis });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
                 break;
             case 'factCheckContent':
-                chrome.tabs.query({ active:true, currentWindow: true }, async (tabs) => {
-                    const tabId = tabs[0].id;
-                    if (!extensionState.getStatus(tabId).isRunning("factChecking")) {
-                            const generatedFactCheck = await factCheckContent(tabId, request.pageContent, request.summary);
-                            chrome.tabs.sendMessage(tabId, { action: "sendGeneratedFactCheck", factCheck: generatedFactCheck });
-                            chrome.runtime.sendMessage({ action: "activateButtons" });
-                    }
-                });
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("factChecking")) {
+                        const generatedFactCheck = await factCheckContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedFactCheck", factCheck: generatedFactCheck });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
                 break;
             case 'defineContent':
-                chrome.tabs.query({ active:true, currentWindow: true }, async (tabs) => {
-                    const tabId = tabs[0].id;
-                    if (!extensionState.getStatus(tabId).isRunning("defining")) {
-                            const generatedDefinition = await defineContent(tabId, request.pageContent, request.summary);
-                            chrome.tabs.sendMessage(tabId, { action: "sendGeneratedDefinition", define: generatedDefinition });
-                            chrome.runtime.sendMessage({ action: "activateButtons" });
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("defining")) {
+                        const generatedDefinition = await defineContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedDefinition", define: generatedDefinition });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
+                break;
+            case 'startRewriting':
+                tabId = sender.tab.id;
+                extensionState.getStatus(tabId).stateChange("rewriting", true);
+                break;
+            case 'stopRewriting':
+                tabId = sender.tab.id;
+                extensionState.getStatus(tabId).stateChange("rewriting", false);
+                chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
                     }
                 });
                 break;
@@ -130,13 +162,16 @@ function createContextMenus() {
 }
 
 /**
- * Initializes a chatbot instance for the specified tab and URL.
+ * Initializes the extension
  * 
  * @param {number} tabId - The ID of the tab.
  * @param {string} pageContent - The content of the current page.
  * @param {string} url - The normalized URL of the current page.
  */
-async function initializeChatbot(tabId, pageContent, url) {
+async function initializeExtension(tabId, pageContent, url) {
+    if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+        extensionState.setStatus(tabId, new StatusStateMachine(url));
+    }
     const existingModel = extensionState.getChatModel(tabId);
 
     if (!existingModel || existingModel.pageUrl !== url) {

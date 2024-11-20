@@ -1,57 +1,71 @@
 /**
  * Asynchronously generates rewritten content for highlighted text elements.
- * Implements retry logic with exponential backoff for error handling.
+ * Implements retry logic with exponential backoff for each element.
  * @param {string} readingLevel - Desired reading level for the rewrite.
  * @param {function} onErrorUpdate - Callback function to report retry errors.
  * @param {number} retries - Max number of retry attempts.
  * @param {number} delay - Initial delay between retries in milliseconds.
  * @returns {string} Rewrite status message.
  */
-export async function generateRewrite(readingLevel, onErrorUpdate, retries = 6, delay = 1000) {
-    let attempt = 0;
+export async function generateRewrite(readingLevel, onErrorUpdate, retries = 3, delay = 1000) {
     let rewriter = null;
     const elements = getHighlightedElements();
-    console.log(elements);
 
-    while (attempt < retries) {
-        try {
-            // Check model availability before initiating a rewrite session
-            const { available } = await ai.languageModel.capabilities();
-            if (available === "no") {
-                return "Error: Model unavailable. Please restart the browser.";
+    try {
+        // Check model availability before initiating a rewrite session
+        const { available } = await ai.languageModel.capabilities();
+        if (available === "no") {
+            return "Error: Model unavailable. Please restart the browser.";
+        }
+
+        // Create session for the rewrite process
+        rewriter = await ai.languageModel.create({ systemPrompt: getRewritePrompt(readingLevel) });
+
+        for (const element of elements) {
+            let attempt = 0;
+            let success = false;
+            let retryDelay = delay;
+
+            while (attempt < retries && !success) {
+                try {
+                    // Attempt to rewrite the current element
+                    await rewriteTextNodes(element, rewriter);
+                    success = true; // Mark as successful
+                    console.log(`Rewrite successful for element:`, element);
+                } catch (error) {
+                    // Handle retry logic and report error
+                    attempt++;
+                    if (onErrorUpdate) {
+                        onErrorUpdate(`Attempt ${attempt} failed for an element: ${error.message}`);
+                    }
+                    console.warn(`Error during rewrite attempt ${attempt} for element:`, error);
+
+                    if (attempt < retries) {
+                        await handleRetry(retryDelay);
+                        retryDelay *= 2; // Exponential backoff
+                    } else {
+                        console.error("Maximum retries reached for element:", element);
+                    }
+                }
             }
 
-            // Create session if it doesn't exist
-            if (!rewriter) {
-                rewriter = await ai.languageModel.create({ systemPrompt: getRewritePrompt(readingLevel) });
-            }
-
-            // Rewrite content for each valid element and replace the original text
-            for (const element of elements) {
-                await rewriteTextNodes(element, rewriter);
-            }
-
-            // Clean up model session after successful rewrite
-            rewriter.destroy();
-            return "Rewrite Successful";
-        } catch (error) {
-            // Handle each retry attempt and report error
-            if (onErrorUpdate) {
-                onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}`);
-            }
-            console.warn(`Error during rewrite attempt ${attempt + 1}:`, error);
-
-            // Increment retry attempt and apply exponential backoff
-            attempt++;
-            if (attempt < retries) {
-                await handleRetry(delay);
-                delay *= 2; // Exponential backoff
-            } else {
-                // Clean up model session if retries exhausted
-                if (rewriter) rewriter.destroy();
-                return "Rewrite failed after multiple attempts.";
+            // Reset retry delay after a successful element rewrite
+            if (success) {
+                retryDelay = delay;
             }
         }
+
+        // Clean up model session after all elements are processed
+        rewriter.destroy();
+        return "Rewrite Successful";
+
+    } catch (error) {
+        console.error("Critical error during rewrite process:", error);
+        if (onErrorUpdate) {
+            onErrorUpdate(`Critical error: ${error.message}`);
+        }
+        if (rewriter) rewriter.destroy();
+        return "Rewrite failed due to critical error.";
     }
 }
 
@@ -126,13 +140,10 @@ async function rewriteTextNodes(element, rewriter) {
 
     // Helper function to collect only valid text nodes within the element
     function collectTextNodes(element) {
-        // If the element is a text node and contains actual text (not just whitespace)
         if (element.nodeType === Node.TEXT_NODE && element.textContent.trim()) {
             textNodes.push(element);
         } else if (element.nodeType === Node.ELEMENT_NODE) {
-            // If it's an element, recursively check child nodes, but skip the parent element itself
             for (const node of element.childNodes) {
-                // Only collect text nodes, not the parent elements of text nodes
                 collectTextNodes(node);
             }
         }
@@ -140,7 +151,7 @@ async function rewriteTextNodes(element, rewriter) {
 
     collectTextNodes(element);
 
-    if (textNodes.length === 0) return;  // No text nodes to rewrite, exit early
+    if (textNodes.length === 0) return; // No text nodes to rewrite, exit early
 
     // Join the content of all text nodes to rewrite the full sentence
     const fullText = textNodes.map(node => node.textContent).join(" ");
@@ -149,8 +160,7 @@ async function rewriteTextNodes(element, rewriter) {
     const rewrittenText = await rewriter.prompt(`Rewrite: ${fullText.trim()}`);
 
     if (!rewrittenText) {
-        console.error("Rewriter returned no text");
-        return;
+        throw new Error("Rewriter returned no text.");
     }
 
     // Distribute the rewritten text back to each original text node

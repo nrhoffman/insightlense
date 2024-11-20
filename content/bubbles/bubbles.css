@@ -47,6 +47,8 @@
     color: #bbb;
     margin-top: 20px;
     padding-top: 10px;
+    background-color: rgba(20, 20, 20, 0.95);
+    transition: opacity 0.2s;
 }
 
 /* Analyze Button Styling */

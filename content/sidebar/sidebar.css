@@ -1,4 +1,5 @@
-#insightSidebar {
+/* Insight Sidebar */
+.insight-sidebar {
     position: fixed;
     top: 0;
     right: 0;
@@ -15,10 +16,10 @@
 }
 
 /* Sidebar Header Styling */
-#insightSidebar h3 {
+.insight-title {
     margin-top: 0;
     margin-bottom: 10px;
-    font-size: 1.6em;
+    font-size: 2.5em;
     font-weight: bold;
     color: #ffffff;
     border-bottom: 2px solid #205e22;
@@ -26,14 +27,14 @@
 }
 
 /* Sidebar Content Styling */
-.box-container {
+.insight-box-container {
     padding: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
-.box-container p {
+.insight-text {
     margin: 0;
     text-align: left;
 }
@@ -49,7 +50,7 @@
     align-items: center;
 }
 
-.spinner {
+.insight-spinner {
     width: 50px;
     height: 50px;
     border: 4px solid #ffffff;
@@ -69,17 +70,17 @@
 }
 
 /* Sidebar Content Styling */
-#insightSidebar * {
+.insight * {
     font-size: 1.0em;
     color: white !important;
 }
 
-#insightSidebar p:hover {
+.insight p:hover {
     background-color: #35383a;
 }
 
 /* Close Button Styling */
-#closeSidebarBtn {
+.insight-close-btn {
     float: right;
     margin: 5px;
     background: none;
@@ -90,6 +91,6 @@
     transition: color 0.3s ease;
 }
 
-#closeSidebarBtn:hover {
+.insight-close-btn:hover {
     color: #f44336;
 }
