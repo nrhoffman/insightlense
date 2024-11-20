@@ -8,7 +8,7 @@ console.log("Content script loaded");
 
 document.addEventListener('DOMContentLoaded', async () => {
     await new Promise(r => setTimeout(r, 3000));
-    sendChatbotInitMsg();
+    sendInitMsg();
 });
 
 // Listener for messages from popup
@@ -17,6 +17,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case "showSidebar":
             createSidebar();
             loadStoredContent();
+            break;
+        case "sendInitMsg":
+            sendInitMsg();
             break;
         case "startingSummary":
             summarizeContent(request.tabId);
@@ -69,7 +72,7 @@ window.onbeforeunload = async function () {
  * Initializes the chatbot model by extracting and processing the page content.
  * Activates relevant buttons in the sidebar upon successful initialization.
  */
-async function sendChatbotInitMsg() {
+async function sendInitMsg() {
     const pageContent = await getPageContent();
     chrome.runtime.sendMessage({ action: "initExtension", pageContent: pageContent });
 }

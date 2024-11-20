@@ -49,19 +49,29 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             case 'initExtension':
                 tabId = sender.tab.id;
                 normalizedUrl = new URL(sender.tab.url);
-                await initializeExtension(tabId, request.pageContent, normalizedUrl);
-                chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                chrome.storage.local.get([`tab_${tabId}`], async (result) => {
+                    const isEnabled = result[`tab_${tabId}`] ?? false; // Default to "off"
+
+                    // Only proceed if the extension is enabled for this tab
+                    if (isEnabled) {
+                        await new Promise(r => setTimeout(r, 3000));
+                        await initializeExtension(tabId, request.pageContent, normalizedUrl);
+                        chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                        await injectScriptsAndStyles(tabId); // Ensure content scripts/styles are injected
+                        chrome.tabs.sendMessage(tabId, { action: "showSidebar" });
+                    } else {
+                        console.log("Extension is disabled for this tab.");
                     }
                 });
-                chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
-                    }
-                });
-                await injectScriptsAndStyles(tabId); // Ensure content scripts/styles are injected
-                chrome.tabs.sendMessage(tabId, { action: "showSidebar" });
                 break;
             case 'getStatuses':
                 normalizedUrl = new URL(request.url);
