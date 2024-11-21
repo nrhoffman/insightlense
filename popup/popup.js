@@ -6,31 +6,6 @@ const sendButton = document.getElementById('sendButton');
 const chatWindow = document.getElementById('chatWindow');
 const userInput = document.getElementById('chatInput');
 
-document.addEventListener("DOMContentLoaded", () => {
-    const toggleButton = document.getElementById("toggleButton");
-
-    // Get the current tab's ID
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const currentTabId = tabs[0].id;
-
-        // Initialize the toggle switch state
-        chrome.storage.local.get([`tab_${currentTabId}`], (result) => {
-            const isEnabled = result[`tab_${currentTabId}`] ?? false; // Default to "off"
-            toggleButton.checked = isEnabled; // Sync checkbox with state
-        });
-
-        // Add event listener for toggle switch
-        toggleButton.addEventListener("change", () => {
-            const newState = toggleButton.checked;
-
-            // Save the new state for the current tab
-            chrome.storage.local.set({ [`tab_${currentTabId}`]: newState }, () => {
-                console.log(`Extension is now ${newState ? "enabled" : "disabled"} for tab ${currentTabId}`);
-            });
-        });
-    });
-});
-
 /**
  * Message listener function to handle sidebar communication with the content script.
  * This function listens for specific actions from the content script and updates the UI accordingly.
@@ -172,7 +147,7 @@ chrome.windows.onRemoved.addListener(removeListeners);
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
     const url = tabs[0].url;
-    
+
     // Send message to content.js to send page info to background for init
     chrome.tabs.sendMessage(tabId, { action: "sendInitMsg", tabId: tabId });
 
@@ -268,21 +243,6 @@ function startTypingIndicatorAnimation(typingIndicator) {
         dotCount = (dotCount % 3) + 1; // Cycle dotCount between 1 and 3
     }, 500); // Update every 500ms
 }
-
-/**
- * Updates the button text and styling based on the state.
- * @param {HTMLElement} button - The button element to update.
- * @param {boolean} isEnabled - The current state of the extension.
- */
-function updateButtonState(button, isEnabled) {
-    if (isEnabled) {
-        button.textContent = "Turn Off";
-        button.classList.remove("off");
-    } else {
-        button.textContent = "Turn On";
-        button.classList.add("off");
-    }
-  }
 
 /**
  * Stops the typing indicator animation by clearing the interval.

@@ -8,7 +8,7 @@ console.log("Content script loaded");
 
 document.addEventListener('DOMContentLoaded', async () => {
     await new Promise(r => setTimeout(r, 3000));
-    sendInitMsg();
+    chrome.runtime.sendMessage({ action: "initExtension" });
 });
 
 // Listener for messages from popup
@@ -74,7 +74,7 @@ window.onbeforeunload = async function () {
  */
 async function sendInitMsg() {
     const pageContent = await getPageContent();
-    chrome.runtime.sendMessage({ action: "initExtension", pageContent: pageContent });
+    chrome.runtime.sendMessage({ action: "initChatBot", pageContent: pageContent });
 }
 
 /**

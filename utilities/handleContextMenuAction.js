@@ -14,16 +14,6 @@ export function handleContextMenuAction(info, tab) {
 
     const action = actions[info.menuItemId];
     if (action && info.selectionText) {
-
-        chrome.storage.local.get([`tab_${tab.id}`], async (result) => {
-            const isEnabled = result[`tab_${tab.id}`] ?? false; // Default to "off"
-
-            // Only proceed if the extension is enabled for this tab
-            if (isEnabled) {
-                chrome.tabs.sendMessage(tab.id, { action, selectedText: info.selectionText });
-            } else {
-                console.log("Extension is disabled for this tab.");
-            }
-        });
+        chrome.tabs.sendMessage(tab.id, { action, selectedText: info.selectionText });
     }
 }
