@@ -3,9 +3,10 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 350px;
+    width: 350px !important;
     height: 100%;
     background-color: rgba(20, 20, 20, 0.95);
+    font-family: 'Roboto', sans-serif !important;
     border-left: 1px solid #444;
     border-radius: 10px 0 0 10px;
     padding: 20px;
@@ -19,7 +20,7 @@
 .insight-title {
     margin-top: 0;
     margin-bottom: 10px;
-    font-size: 2.5em;
+    font-size: 2em !important;
     font-weight: bold;
     color: #ffffff;
     border-bottom: 2px solid #205e22;
@@ -28,6 +29,8 @@
 
 /* Sidebar Content Styling */
 .insight-box-container {
+    font-size: 1.0em !important;
+    color: white;
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -67,12 +70,6 @@
     100% {
         transform: rotate(360deg);
     }
-}
-
-/* Sidebar Content Styling */
-.insight * {
-    font-size: 1.0em;
-    color: white !important;
 }
 
 .insight p:hover {

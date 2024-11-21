@@ -172,7 +172,6 @@ async function displayBubble(selectedText, type) {
                 await new Promise(r => setTimeout(r, 3000));
 
                 rewriteBubble.remove();
-                chrome.runtime.sendMessage({ action: "activateButtons" });
             });
             rewriteButton._listenerAdded = true;
         }

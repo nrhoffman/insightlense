@@ -60,16 +60,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 url = sender.tab.url;
                 await new Promise(r => setTimeout(r, 3000));
                 await initializeExtension(tabId, request.pageContent, url);
-                chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
-                    }
-                });
-                chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
-                    }
-                });
                 break;
             case 'getStatuses':
                 url = request.url;
@@ -208,6 +198,17 @@ async function initializeExtension(tabId, pageContent, url) {
     } catch (error) {
         console.error(`Failed to initialize ChatBot for tab ${tabId}:`, error);
     }
+
+    chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+        }
+    });
+    chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+        }
+    });
 }
 
 /**

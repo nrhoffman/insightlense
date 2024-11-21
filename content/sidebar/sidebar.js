@@ -62,7 +62,7 @@ function createLoadingSpinner() {
 function createSidebarElement() {
     const sidebar = document.createElement('div');
     sidebar.id = 'insightSidebar';
-    sidebar.className = 'insight-sidebar insight';
+    sidebar.className = 'insight-sidebar';
     sidebar.innerHTML = `
         <button id="closeSidebarBtn" class="insight-close-btn">✖️</button>
         <h3 class="insight-title">Summary</h3>

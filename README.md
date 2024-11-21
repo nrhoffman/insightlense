@@ -1,39 +1,39 @@
-# InsightLense
+# **InsightLense Chrome Extension**  
+<font size="6"><strong>Your Personal AI Web Assistant for Safe and Smart Knowledge Consumption</strong></font>  
 
-The InsightLense Chrome Extension is your own personal AI web assistant that has your safe consumption of knowledge
-as it's top priority.
+InsightLense is designed to help you navigate, understand, and analyze web content with ease and safety. Powered by advanced AI, it provides a suite of tools that empower you to interact with online information responsibly and effectively.
 
-To Start: Ctrl+Q
+### **Key Features**
 
-It can provide:
+1. **Summarize Page Content**  
+   With a simple click of the **Summarize** button in the popup (or press **Ctrl+Q**), InsightLense will generate a concise summary of the page content, making it easier to grasp the main points quickly.
 
-1) Summarization of page content - Just click the summarize button in the popup.
+2. **Chat Bot**  
+   Have questions about the content of the page? Or just need assistance? Use the built-in **Chat Bot** in the popup to ask anything—whether it's related to the page you're viewing or general queries.
 
-2) Chat Bot - In the popup, ask it any questions you may have, specifically about the page content - or anything else!
+3. **Right-Click Context Menu**  
+   Unlock additional tools with InsightLense’s context menu, available when you right-click on highlighted text. These options provide more in-depth insights and control over how you engage with the content:
 
-The below features can be found in the right click options under the InsightLense menu.
+   - **Define**  
+     Right-click on any word or phrase and select **Define** to get a clear and detailed explanation of the term.
+  
+   - **Fact Check**  
+     Concerned about the accuracy of a statement? Highlight it and select **Fact-Check** to verify its truthfulness with a reliable source.
 
-3) Define - Right click on highlighted text, and click Define to receive an explanation on the selected word or phrase.
+   - **Analyze**  
+     Get a comprehensive breakdown of the highlighted text with **Analyze**. InsightLense evaluates the content for logical fallacies, bias, potential ulterior motives, and flags any malicious intent, ensuring you're aware of propagandists, marketers, and other questionable influences.
 
-4) Fact Check - Right click on highlighted text, and Fact-Check to receive a fact check for the selected statement.
+   - **Rewrite**  
+     Need a clearer or more neutral version of the text? Select **Rewrite** to have the highlighted content rephrased to remove bias, logical fallacies, and propaganda. You can also choose to have the rewritten content tailored for a specific reading level—whether for children or a college-level audience.
 
-5) Analyze - Right click on highlighted text, and analyze the content for various attributes, logical falacies,
-   ulterior motives, and an overall analysis of the text. Be aware of propagandists, shady marketers,
-   and other possible malicious content.
+---
 
-6) Rewrite - Right click on highlighted text, and have it rewritten removing bias, logical fallacy, and 
-   propaganda. Additionally, there's an option to have the rewritten content be at a children's or college reading level.
+### **Why Use InsightLense?**
 
+- **Ensure Safe Consumption**: With InsightLense, you can avoid falling prey to misleading or biased content.  
+- **Improve Understanding**: Get clear, concise, and easy-to-understand summaries, definitions, and rewrites.  
+- **Stay Informed**: Make better decisions with instant fact-checking and content analysis.
 
-Limitations:
+---
 
-1) The model is not completely up to speed on current events. If an event just occurred and the model is expected to give validity 
-to the event rather than an analysis, there will be limitations.
-E.g. If the election of 2024 just occurred, the model may get confused with the current election with previous elections.
-
-2) Fact Check and Define have a limitation that can be relieved by first summarizing. Sometimes context is important to giving
-an accurate Fact Check or Definition.
-E.g. Are we defining an "Angel" of Hell's Angels or an "Angel" in a religious context?
-
-3) With the rewrite API being bugged out of existance, the prompt API is currently being used for rewriting. Because it has not
-been trained on explicit rewrites, there are some limitations.
+Take control of the information you consume online with InsightLense—your AI-powered, smart web assistant.

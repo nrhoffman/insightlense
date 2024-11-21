@@ -117,8 +117,13 @@ class ChatBot {
      * @returns {string} - The generated prompt string.
      */
     getPrompt(pageContent) {
-        return `You are a chatbot that will answer questions about content given.
-                Keep responses short and only respond in English and trained formats/language.
+        return `You are a chatbot that will answer questions.
+                Rules:
+                - Keep responses short.
+                - Remember previous responses for context.
+                - Remember the page content that's given for questions.
+                - Answer questions that are beyond page content if needed.
+                - Only respond in English and trained formats/language.
                 Remember enough to answer questions later: ${pageContent}`;
     }
 
