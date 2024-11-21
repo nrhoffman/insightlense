@@ -43,23 +43,23 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Listener for messages from popup or content scripts
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     try {
-        let normalizedUrl;
+        let url;
         let tabId;
         switch (request.action) {
             case 'initExtension':
                 tabId = sender.tab.id;
-                normalizedUrl = new URL(sender.tab.url);
+                url = sender.tab.url;
                 await injectScriptsAndStyles(tabId); // Ensure content scripts/styles are injected
                 chrome.tabs.sendMessage(tabId, { action: "showSidebar" });
-                if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== normalizedUrl) {
-                    extensionState.setStatus(tabId, new StatusStateMachine(normalizedUrl));
+                if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+                    extensionState.setStatus(tabId, new StatusStateMachine(url));
                 }
                 break;
             case 'initChatBot':
                 tabId = sender.tab.id;
-                normalizedUrl = new URL(sender.tab.url);
+                url = sender.tab.url;
                 await new Promise(r => setTimeout(r, 3000));
-                await initializeExtension(tabId, request.pageContent, normalizedUrl);
+                await initializeExtension(tabId, request.pageContent, url);
                 chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
                     if (chrome.runtime.lastError) {
                         console.warn("Popup is not open:", chrome.runtime.lastError.message);
@@ -72,8 +72,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 });
                 break;
             case 'getStatuses':
-                normalizedUrl = new URL(request.url);
-                const statusToSend = await getCurrentStatuses(request.tabId, normalizedUrl);
+                url = request.url;
+                const statusToSend = await getCurrentStatuses(request.tabId, url);
                 chrome.runtime.sendMessage({ action: "sendStatus", status: statusToSend });
                 break;
             case 'summarizeContent':
@@ -177,23 +177,36 @@ function createContextMenus() {
  * @param {string} url - The normalized URL of the current page.
  */
 async function initializeExtension(tabId, pageContent, url) {
-    const existingModel = extensionState.getChatModel(tabId);
+    if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+        extensionState.setStatus(tabId, new StatusStateMachine(url));
+    }
 
-    if (!existingModel || existingModel.pageUrl !== url) {
-        const chatbot = new ChatBot(url);
+    let chatbot = extensionState.getChatModel(tabId);
+
+    // If there's no chatbot or the URL has changed, create a new one
+    if (!chatbot || chatbot.pageUrl !== url) {
+        chatbot = new ChatBot(url);
         extensionState.setChatModel(tabId, chatbot);
         console.log(`Chat model updated for tab ${tabId} with URL ${url}`);
+    }
 
-        if (!chatbot.isInitialized() && !chatbot.isInitializing()) {
-            try {
-                await chatbot.initializeModel(pageContent);
-                console.log(`ChatBot initialized for tab ${tabId}`);
-            } catch (error) {
-                console.error(`Failed to initialize ChatBot for tab ${tabId}:`, error);
-            }
-        }
-    } else {
-        console.log("Using existing ChatBot instance.");
+    // Prevent re-initializing an already initializing or initialized ChatBot
+    if (chatbot.isInitializing()) {
+        console.log(`ChatBot is already initializing for tab ${tabId}`);
+        return;
+    }
+
+    if (chatbot.isInitialized()) {
+        console.log(`ChatBot is already initialized for tab ${tabId}`);
+        return;
+    }
+
+    // Mark chatbot as initializing and initialize it
+    try {
+        await chatbot.initializeModel(pageContent);
+        console.log(`ChatBot initialized for tab ${tabId}`);
+    } catch (error) {
+        console.error(`Failed to initialize ChatBot for tab ${tabId}:`, error);
     }
 }
 

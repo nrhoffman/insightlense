@@ -123,6 +123,7 @@ async function displayBubble(selectedText, type) {
     } else if (type === "analysisBubble") {
         const analyzeButton = document.getElementById('analyzeButton');
         const analyzeBubble = document.getElementById(type);
+        updateCharacterCount();
         if (!analyzeButton._listenerAdded) {
             analyzeButton.addEventListener('click', async () => {
                 const filteredText = selectedText.split('\n')
@@ -146,6 +147,7 @@ async function displayBubble(selectedText, type) {
     } else if (type === "rewriteBubble") {
         const rewriteButton = document.getElementById('rewriteButton');
         const rewriteBubble = document.getElementById(type);
+        updateCharacterCount();
         const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
         const loadingForBubble = document.getElementById('loadingContainer');
         checkboxes.forEach(checkbox => {
@@ -236,7 +238,6 @@ async function updateGeneratedFcOrDefine(type, content){
             </footer>
         `;
     };
-    console.log("Bubble Type: ", type);
     if (type === "factCheckBubble") {
         updateBubbleContent(content, "Fact Check");
     }
