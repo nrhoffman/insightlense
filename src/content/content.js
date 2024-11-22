@@ -65,11 +65,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case "sendSummaryUpdate":
             const summaryEl = document.getElementById('summary');
-            summaryEl.innerHTML = `<span>${(request.summarizeContent).replace(/[\*-]/g, '')}</span>`;
+            summaryEl.innerHTML = `<span>${(request.summaryContent).replace(/[\*-]/g, '')}</span>`;
             break;
         case "sendAnalysisUpdate":
             const analysisEl = document.getElementById('analysis');
-            analysisEl.innerHTML = `<span>${(request.analyzedContent).replace(/[\*-]/g, '')}</span>`;
+            analysisEl.innerHTML = `<span>${(request.analysisContent).replace(/[\*-]/g, '')}</span>`;
             break;
         case "sendGeneratedSummary":
             updateGeneratedSummary(request.summary);
