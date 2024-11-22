@@ -151,11 +151,10 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3,
                 onErrorUpdate(`Attempt ${attempt + 1} failed: ${error.message}\n`);
             }
 
-            console.error(`Error summarizing content on attempt ${attempt + 1}:`, error);
+            console.warn(`Error summarizing content on attempt ${attempt + 1}:`, error);
             attempt++;
             if (attempt < retries) {
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await handleRetry(delay);
                 delay *= 2; // Exponential backoff
             } else {
                 console.log("Max retries reached. Returning empty summary.");
@@ -177,20 +176,28 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3,
  */
 async function createSummarizerSession(focusInput, maxChar = 4000, finalSummary = false) {
     const context = getSummaryContext(focusInput, maxChar);
-    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
-    else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
     
 }
 
 /**
- * Constructs the context string for the summarizer model, incorporating the focus input and domain.
+ * Constructs the context string for the summarizer model, incorporating the focus input.
  *
  * @param {string} focusInput - Specific topic or focus area for the summary.
  * @returns {string} The customized context string for summarization.
  */
 function getSummaryContext(focusInput, maxChar) {
-    const domain = window.location.hostname;
     return `You must keep under ${maxChar} characters.
-            Mention the domain: ${domain}.
             Focus the summary on: "${focusInput}" if not blank.`;
+}
+
+/**
+ * Handles retry logic, including exponential backoff.
+ * 
+ * @param {number} delay - The current delay in milliseconds before the next retry.
+ */
+async function handleRetry(delay) {
+    console.log(`Retrying in ${delay}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
 }

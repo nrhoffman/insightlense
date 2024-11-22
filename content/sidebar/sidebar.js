@@ -32,7 +32,7 @@ export function getOrCreateLoadingSpinner(parent) {
     let loadingSpinner = document.getElementById('loadingSpinner');
     if (!loadingSpinner) {
         loadingSpinner = createLoadingSpinner();
-        const boxContainer = parent.closest('.box-container');
+        const boxContainer = parent.closest('.insight-box-container');
         if (boxContainer) {
             boxContainer.insertBefore(loadingSpinner, parent);
         }
@@ -48,7 +48,7 @@ export function getOrCreateLoadingSpinner(parent) {
 function createLoadingSpinner() {
     const loadingSpinner = document.createElement('div');
     loadingSpinner.id = 'loadingSpinner';
-    loadingSpinner.classList.add('spinner');
+    loadingSpinner.classList.add('insight-spinner');
     return loadingSpinner;
 }
 
@@ -62,16 +62,16 @@ function createLoadingSpinner() {
 function createSidebarElement() {
     const sidebar = document.createElement('div');
     sidebar.id = 'insightSidebar';
-    sidebar.class = 'insight-sidebar';
+    sidebar.className = 'insight-sidebar';
     sidebar.innerHTML = `
-        <button id="closeSidebarBtn">✖️</button>
-        <h3>Summary</h3>
-        <div class="box-container">
-            <p id="summary">Open the popup, optionally enter a focus, and click summarize.</p>
+        <button id="closeSidebarBtn" class="insight-close-btn">✖️</button>
+        <h3 class="insight-title">Summary</h3>
+        <div class="insight-box-container">
+            <p id="summary" class="insight-text">Open the popup, optionally enter a focus, and click summarize.</p>
         </div>
-        <h3>Analysis</h3>
-        <div class="box-container" id="analysisContainer">
-            <p id="analysis">Highlight text, right-click, and "Analyze". First generate summary.</p>
+        <h3 class="insight-title">Analysis</h3>
+        <div class="insight-box-container" id="analysisContainer">
+            <p id="analysis" class="insight-text">Highlight text, right-click, and "Analyze". First generate summary.</p>
         </div>
     `;
     document.body.appendChild(sidebar);

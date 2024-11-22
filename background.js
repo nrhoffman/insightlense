@@ -1,127 +1,344 @@
-const REMOVE_SCHEDULE_MS = 12 * 60 * 60 * 1000;
+import ChatBot from './utilities/chatBot.js';
+import { clearExpiredStorage } from './utilities/clearExpiredStorage.js'
+import ExtensionState from './state/extensionState.js'
+import { formatTextResponse } from './utilities/formatTextResponse.js';
+import { generateDefinition } from './tools/define.js';
+import { generateFactCheck } from './tools/factCheck.js';
+import { generateAnalysis } from './tools/analyze.js';
+import { generateSummary } from './tools/summarize.js';
+import { handleContextMenuAction } from './utilities/handleContextMenuAction.js'
+import StatusStateMachine from './state/statusStateMachine.js';
 
-setInterval(clearExpiredStorage, REMOVE_SCHEDULE_MS);
-clearExpiredStorage();
+console.log("Background worker started!");
 
-// To retrieve all keys and values in local storage
-chrome.storage.local.get(null, (result) => {
-    console.log("Current Local Storage:", result);
+const REMOVE_SCHEDULE_MS = 12 * 60 * 60 * 1000; // Interval to clear expired storage (12 hours)
+
+// Singleton instance
+const extensionState = new ExtensionState();
+
+setInterval(clearExpiredStorage, REMOVE_SCHEDULE_MS); // Periodic storage cleanup
+clearExpiredStorage(REMOVE_SCHEDULE_MS); // Initial cleanup on startup
+
+// Event listener for extension installation
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("Extension installed.");
+    createContextMenus(); // Setup context menu options
 });
 
-// Listener for Chrome extension installation event. Creates context menu options when the extension is installed.
-chrome.runtime.onInstalled.addListener(() => {
-    createContextMenus();
+// Event listener for context menu item clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    try {
+        handleContextMenuAction(info, tab); // Perform the selected action
+    } catch (error) {
+        console.error("Error handling context menu action:", error);
+    }
+});
+
+// Event listener for tab closure to clean up resources
+chrome.tabs.onRemoved.addListener((tabId) => {
+    extensionState.cleanUpTab(tabId);
+    console.log(`Cleaned up resources for tab ${tabId}`);
+});
+
+// Listener for messages from popup or content scripts
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+    try {
+        let url;
+        let tabId;
+        switch (request.action) {
+            case 'initExtension':
+                tabId = sender.tab.id;
+                url = sender.tab.url;
+                await injectScriptsAndStyles(tabId); // Ensure content scripts/styles are injected
+                chrome.tabs.sendMessage(tabId, { action: "showSidebar" });
+                if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+                    extensionState.setStatus(tabId, new StatusStateMachine(url));
+                }
+                break;
+            case 'initChatBot':
+                tabId = sender.tab.id;
+                url = sender.tab.url;
+                await new Promise(r => setTimeout(r, 3000));
+                await initializeExtension(tabId, request.pageContent, url);
+                break;
+            case 'getStatuses':
+                url = request.url;
+                const statusToSend = await getCurrentStatuses(request.tabId, url);
+                chrome.runtime.sendMessage({ action: "sendStatus", status: statusToSend });
+                break;
+            case 'summarizeContent':
+                if (!extensionState.getStatus(request.tabId).isRunning("summarizing")) {
+                    const generatedSummary = await summarizeContent(request.tabId, request.focusInput, request.pageContent);
+                    chrome.tabs.sendMessage(request.tabId, { action: "sendGeneratedSummary", summary: generatedSummary });
+                    chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                        }
+                    });
+                }
+                break;
+            case 'getChatBotOutput':
+                const outputToSend = await getChatBotOutput(request.chatInput, request.tabId);
+                chrome.runtime.sendMessage({ action: "setChatBotOutput", output: outputToSend });
+                break;
+            case 'analyzeContent':
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("analyzing")) {
+                        const generatedAnalysis= await analyzeContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedAnalysis", analysis: generatedAnalysis });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
+                break;
+            case 'factCheckContent':
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("factChecking")) {
+                        const generatedFactCheck = await factCheckContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedFactCheck", factCheck: generatedFactCheck });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
+                break;
+            case 'defineContent':
+                tabId = sender.tab.id;
+                if (!extensionState.getStatus(tabId).isRunning("defining")) {
+                        const generatedDefinition = await defineContent(tabId, request.pageContent, request.summary);
+                        chrome.tabs.sendMessage(tabId, { action: "sendGeneratedDefinition", define: generatedDefinition });
+                        chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                            }
+                        });
+                }
+                break;
+            case 'startRewriting':
+                tabId = sender.tab.id;
+                extensionState.getStatus(tabId).stateChange("rewriting", true);
+                break;
+            case 'stopRewriting':
+                tabId = sender.tab.id;
+                extensionState.getStatus(tabId).stateChange("rewriting", false);
+                chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn("Popup is not open:", chrome.runtime.lastError.message);
+                    }
+                });
+                break;
+            default:
+                console.warn("Unknown action:", request.action);
+        }
+    } catch (error) {
+        console.error("Error processing message:", error);
+    }
+});
+
+// Log the initial local storage state
+chrome.storage.local.get(null, (result) => {
+    console.log("Current Local Storage:", result);
 });
 
 /**
  * Creates the context menu items for the extension.
  */
 function createContextMenus() {
-    createContextMenuItem("define", "Define");
-    createContextMenuItem("factCheck", "Fact-Check");
-    createContextMenuItem("analyze", "Analyze");
-    createContextMenuItem("rewrite", "Rewrite")
-}
+    const menuItems = [
+        { id: "define", title: "Define" },
+        { id: "factCheck", title: "Fact-Check" },
+        { id: "analyze", title: "Analyze" },
+        { id: "rewrite", title: "Rewrite" }
+    ];
 
-/**
- * Creates a context menu item.
- * 
- * @param {string} id - The ID for the context menu item.
- * @param {string} title - The title displayed for the context menu item.
- */
-function createContextMenuItem(id, title) {
-    chrome.contextMenus.create({
-        id: id,
-        title: title,
-        contexts: ["selection"]
+    menuItems.forEach(({ id, title }) => {
+        chrome.contextMenus.create({ id, title, contexts: ["selection"] });
     });
 }
 
 /**
- * Handles clicks on context menu items. Sends messages to the content script based on the clicked menu item.
+ * Initializes the extension
  * 
- * @param {Object} info - Information about the clicked context menu item, including selected text.
- * @param {Object} tab - Details of the active tab where the context menu was clicked.
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} pageContent - The content of the current page.
+ * @param {string} url - The normalized URL of the current page.
  */
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+async function initializeExtension(tabId, pageContent, url) {
+    if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+        extensionState.setStatus(tabId, new StatusStateMachine(url));
+    }
 
-    // Inject the necessary scripts and styles for the context menu action
-    await injectScriptsAndStyles(tab.id);
+    let chatbot = extensionState.getChatModel(tabId);
 
-    // Handle specific context menu actions based on the selected item
-    handleContextMenuAction(info, tab);
-});
+    // If there's no chatbot or the URL has changed, create a new one
+    if (!chatbot || chatbot.pageUrl !== url) {
+        chatbot = new ChatBot(url);
+        extensionState.setChatModel(tabId, chatbot);
+        console.log(`Chat model updated for tab ${tabId} with URL ${url}`);
+    }
+
+    // Prevent re-initializing an already initializing or initialized ChatBot
+    if (chatbot.isInitializing()) {
+        console.log(`ChatBot is already initializing for tab ${tabId}`);
+        return;
+    }
+
+    if (chatbot.isInitialized()) {
+        console.log(`ChatBot is already initialized for tab ${tabId}`);
+        return;
+    }
+
+    // Mark chatbot as initializing and initialize it
+    try {
+        await chatbot.initializeModel(pageContent);
+        console.log(`ChatBot initialized for tab ${tabId}`);
+    } catch (error) {
+        console.error(`Failed to initialize ChatBot for tab ${tabId}:`, error);
+    }
+
+    chrome.runtime.sendMessage({ action: "initChatWindow" }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+        }
+    });
+    chrome.runtime.sendMessage({ action: "activateButtons" }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.warn("Popup is not open:", chrome.runtime.lastError.message);
+        }
+    });
+}
 
 /**
- * Injects required styles into the current tab.
+ * Retrieves and updates the current statuses of the chatbot and summarizing process.
  * 
- * @param {number} tabId - The ID of the active tab where styles need to be injected.
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} url - The normalized URL of the current page.
+ * @returns {Object} - The current statuses of the chatbot and summarization process.
+ */
+async function getCurrentStatuses(tabId, url) {
+    if (!extensionState.hasStatus(tabId) || extensionState.getStatus(tabId).pageUrl !== url) {
+        extensionState.setStatus(tabId, new StatusStateMachine(url));
+    }
+
+    const chatModel = extensionState.getChatModel(tabId);
+    const statusMachine = extensionState.getStatus(tabId);
+    return {
+        initialized: chatModel?.isInitialized() ? "yes" : "no",
+        summarized: statusMachine?.isSummarized() ? "yes" : "no",
+        notRunning: statusMachine?.allNotRunning() && 
+            !chatModel?.isInitializing() &&
+            !chatModel?.isResponding() ? "yes" : "no"
+    };
+}
+
+/**
+ * Summarizes page content with an optional focus and updates the sidebar.
+ * 
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} focusInput - Optional focus for the summary.
+ * @param {string} pageContent - The content of the current page.
+ * @returns {string} - The generated summary.
+ */
+async function summarizeContent(tabId, focusInput, pageContent) {
+    const statusMachine = extensionState.getStatus(tabId);
+    statusMachine.stateChange("summarizing", true);
+
+    const updateSummaryContent = (content) => chrome.tabs.sendMessage(tabId, { action: "sendSummaryUpdate", summaryContent: content });
+    const onSummaryErrorUpdate = (errorMessage) => updateSummaryContent(errorMessage);
+
+    const summary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
+    statusMachine.stateChange("summarizing", false);
+    if (!statusMachine.isSummarized()) statusMachine.setSummarized();
+
+    return summary;
+}
+
+/**
+ * Retrieves the output from the ChatBot instance for a given input.
+ * 
+ * @param {string} input - The user input.
+ * @param {number} tabId - The ID of the tab.
+ * @returns {string} - The formatted output from the ChatBot.
+ */
+async function getChatBotOutput(input, tabId) {
+    const chatbot = extensionState.getChatModel(tabId);
+    if (!chatbot) throw new Error(`ChatBot not initialized for tab ${tabId}`);
+    const output = await chatbot.getChatBotOutput(input);
+    return formatTextResponse(output);
+}
+
+/**
+ * Analyzes a selected portion of content
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} pageData - Content to be analyzed.
+ * @param {string} summary - summary being passed in
+ * @returns {string} - The generated analysis.
+ */
+async function analyzeContent(tabId, pageData, summary) {
+    const statusMachine = extensionState.getStatus(tabId);
+    statusMachine.stateChange("analyzing", true);
+
+    const updateAnalysisContent = (content) => chrome.tabs.sendMessage(tabId, { action: "sendAnalysisUpdate", analysisContent: content });
+    const onAnalysisErrorUpdate = (errorMessage) => updateAnalysisContent(errorMessage);
+
+    const analysis = await generateAnalysis(pageData, summary, onAnalysisErrorUpdate);
+    statusMachine.stateChange("analyzing", false);
+
+    return formatTextResponse(analysis);
+}
+
+/**
+ * Fact Checks a selected portion of content
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} pageData - Content to be fact checked.
+ * @param {string} summary - summary being passed in
+ * @returns {string} - The generated fact check.
+ */
+async function factCheckContent(tabId, pageData, summary) {
+    const statusMachine = extensionState.getStatus(tabId);
+    statusMachine.stateChange("factChecking", true);
+
+    const updateFactCheckContent = (content) => chrome.tabs.sendMessage(tabId, { action: "sendGeneratedFactCheck", factCheck: content });
+    const onFactCheckErrorUpdate = (errorMessage) => updateFactCheckContent(errorMessage);
+
+    const factCheck = await generateFactCheck(pageData, summary, onFactCheckErrorUpdate);
+    statusMachine.stateChange("factChecking", false);
+
+    return formatTextResponse(factCheck);
+}
+
+/**
+ * Defines a selected portion of content
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} pageData - Content to be defined.
+ * @param {string} summary - summary being passed in
+ * @returns {string} - The generated definition.
+ */
+async function defineContent(tabId, pageData, summary) {
+    const statusMachine = extensionState.getStatus(tabId);
+    statusMachine.stateChange("defining", true);
+
+    const updateDefineContent = (content) => chrome.tabs.sendMessage(tabId, { action: "sendGeneratedDefinition", define: content });
+    const onDefineErrorUpdate = (errorMessage) => updateDefineContent(errorMessage);
+
+    const definition = await generateDefinition(pageData, summary, onDefineErrorUpdate);
+    statusMachine.stateChange("defining", false);
+
+    return formatTextResponse(definition);
+}
+
+/**
+ * Injects required styles into the specified tab.
+ * 
+ * @param {number} tabId - The ID of the active tab.
  */
 async function injectScriptsAndStyles(tabId) {
     try {
-        await chrome.scripting.insertCSS({
-            target: { tabId: tabId },
-            files: ["./content/bubbles/bubbles.css"]
-        });
+        await chrome.scripting.insertCSS({ target: { tabId }, files: ["./content/bubbles/bubbles.css", "./content/sidebar/sidebar.css"] });
     } catch (error) {
-        console.error("Error injecting scripts and styles:", error);
-    }
-}
-
-/**
- * Handles the specific action based on the clicked context menu item.
- * 
- * @param {Object} info - Information about the clicked menu item, including the selected text.
- * @param {Object} tab - Details of the active tab where the context menu was clicked.
- */
-function handleContextMenuAction(info, tab) {
-    const actionMap = {
-        "define": "displayDefineBubble",
-        "factCheck": "displayFactCheckBubble",
-        "analyze": "displayAnalysisBubble",
-        "rewrite": "displayRewriteBubble"
-    };
-
-    const action = actionMap[info.menuItemId];
-
-    // Check if selected text exists and the action is valid
-    if (action && info.selectionText) {
-        try {
-            // Send the appropriate action to the content script
-            chrome.tabs.sendMessage(tab.id, { action: action, selectedText: info.selectionText });
-        } catch (error) {
-            console.error("Error in context menu action:", error);
-        }
-    }
-}
-
-
-/**
- * Periodically checks all stored items and removes any that are older than 24 hours.
- * Call this function periodically to maintain storage within the 24-hour limit.
- */
-async function clearExpiredStorage() {
-    const allData = await chrome.storage.local.get();
-    const currentTime = Date.now();
-
-    for (const key in allData) {
-        const storedItem = allData[key];
-        
-        // Check if the item has a timestamp and remove if older than 24 hours
-        if (storedItem.timestamp && (currentTime - storedItem.timestamp) > REMOVE_SCHEDULE_MS) {
-            await chrome.storage.local.remove(key);
-        }
-    }
-
-    // Clear expired messages within 'chatConversation'
-    if (allData.chatConversation) {
-        const recentMessages = allData.chatConversation.filter(
-            message => message.timestamp && (currentTime - message.timestamp) <= REMOVE_SCHEDULE_MS
-        );
-
-        // Update 'chatConversation' in storage only if there are changes
-        if (recentMessages.length !== allData.chatConversation.length) {
-            await chrome.storage.local.set({ chatConversation: recentMessages });
-        }
+        console.error("Error injecting styles:", error);
     }
 }

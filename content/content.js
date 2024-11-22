@@ -1,34 +1,48 @@
-import ChatBot from './utilities/chatBot';
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
-import { define } from './tools/define.js';
-import { factCheck } from './tools/factCheck.js';
-import { generateAnalysis } from './tools/analyze.js';
-import { generateSummary } from './tools/summarize.js';
-import { generateRewrite } from './tools/rewrite.js';
-import { getPageContent } from './utilities/getPageContent.js';
+import { formatTextResponse } from '../utilities/formatTextResponse.js';
+import { generateRewrite } from '../tools/rewrite.js';
+import { getPageContent } from '../utilities/getPageContent.js';
 import { populateBubble } from './bubbles/bubbles.js';
-import StatusStateMachine from './utilities/statusStateMachine';
 
 console.log("Content script loaded");
 
-const statusState = new StatusStateMachine();
-const chatBot = new ChatBot();
+document.addEventListener('DOMContentLoaded', async () => {
+    await new Promise(r => setTimeout(r, 3000));
+    chrome.runtime.sendMessage({ action: "initExtension" });
+});
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
-        case "initializeModel":
-            initializeChatBot();
-            break;
         case "showSidebar":
             createSidebar();
             loadStoredContent();
             break;
-        case 'summarizeContent':
-            if (!statusState.isRunning("summarizing")) summarizeContent(request.focusInput);
+        case "sendInitMsg":
+            sendInitMsg();
             break;
-        case 'getChatBotOutput':
-            getChatBotOutput(request.chatInput);
+        case "startingSummary":
+            summarizeContent(request.tabId);
+            break;
+        case "sendSummaryUpdate":
+            const summaryEl = document.getElementById('summary');
+            summaryEl.innerHTML = `<span>${(request.summarizeContent).replace(/[\*-]/g, '')}</span>`;
+            break;
+        case "sendAnalysisUpdate":
+            const analysisEl = document.getElementById('analysis');
+            analysisEl.innerHTML = `<span>${(request.analyzedContent).replace(/[\*-]/g, '')}</span>`;
+            break;
+        case "sendGeneratedSummary":
+            updateGeneratedSummary(request.summary);
+            break;
+        case "sendGeneratedAnalysis":
+            updateGeneratedAnalysis(request.analysis);
+            break;
+        case "sendGeneratedFactCheck":
+            updateGeneratedFcOrDefine('factCheckBubble', request.factCheck)
+            break;
+        case "sendGeneratedDefinition":
+            updateGeneratedFcOrDefine('defineBubble', request.define)
             break;
         case 'displayDefineBubble':
             displayBubble(request.selectedText, 'defineBubble');
@@ -41,9 +55,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
         case 'displayRewriteBubble':
             displayBubble(request.selectedText, 'rewriteBubble');
-            break;
-        case 'getStatuses':
-            sendResponse(getCurrentStatuses());
             break;
     }
 });
@@ -61,55 +72,37 @@ window.onbeforeunload = async function () {
  * Initializes the chatbot model by extracting and processing the page content.
  * Activates relevant buttons in the sidebar upon successful initialization.
  */
-async function initializeChatBot() {
-    if (!chatBot.isInitialized() && !chatBot.isInitializing()) {
-        const pageContent = await getPageContent();
-        await chatBot.initializeModel(pageContent);
-        chrome.runtime.sendMessage({ action: "activateButtons" });
-        chrome.runtime.sendMessage({ action: "initChatBot" });
-    }
-}
-
-/**
- * Retrieves and processes output from the chatbot model based on user input.
- * Displays the model's response in the sidebar.
- * @param {string} input - The user input to send to the chatbot.
- */
-async function getChatBotOutput(input) {
-    let result = await chatBot.getChatBotOutput(input);
-    chrome.runtime.sendMessage({ action: "setChatBotOutput", output: formatTextResponse(result) });
+async function sendInitMsg() {
+    const pageContent = await getPageContent();
+    chrome.runtime.sendMessage({ action: "initChatBot", pageContent: pageContent });
 }
 
 /**
  * Generates a summary of the page content and displays it in the sidebar.
  * Optionally focuses the summary on a specific topic if provided.
- * @param {string} focusInput - Optional focus for the summary.
+ * @param {string} tabId - The ID of the current tab.
  */
-async function summarizeContent(focusInput) {
-    statusState.stateChange("summarizing", true);
-
-    const summary = document.getElementById('summary');
-    summary.innerHTML = '';
-    const loadingSpinner = getOrCreateLoadingSpinner(summary);
-
-    const updateSummaryContent = (content) => {
-        summary.innerHTML = `<span>${content.replace(/[\*-]/g, '')}</span>`;
-    };
-
-    const onSummaryErrorUpdate = (errorMessage) => updateSummaryContent(errorMessage);
+async function summarizeContent(tabId) {
+    const summaryEl = document.getElementById('summary');
+    summaryEl.innerHTML = '';
+    const loadingSpinner = getOrCreateLoadingSpinner(summaryEl);
 
     const pageContent = await getPageContent();
-    const combinedSummary = await generateSummary(pageContent, focusInput, onSummaryErrorUpdate);
 
-    updateSummaryContent(combinedSummary);
+    chrome.runtime.sendMessage({ action: "summarizeContent", tabId: tabId, pageContent: pageContent });
+}
+
+/**
+ * Updates the summary section in the sidebar with the newly generated summary.
+ * @param {string} summary - The summary text to display in the sidebar.
+ */
+async function updateGeneratedSummary(summary) {
+    const summaryEl = document.getElementById('summary');
+    const loadingSpinner = getOrCreateLoadingSpinner(summaryEl);
+    summaryEl.innerHTML = `<span>${(summary).replace(/[\*-]/g, '')}</span>`;
     loadingSpinner.remove();
 
-    await saveContentToStorage("summary", combinedSummary);
-
-    statusState.stateChange("summarizing", false);
-    if (!statusState.isSummarized()) statusState.setSummarized();
-
-    chrome.runtime.sendMessage({ action: "activateButtons" });
+    await saveContentToStorage("summary", summary);
 }
 
 /**
@@ -118,31 +111,19 @@ async function summarizeContent(focusInput) {
  * @param {string} type - Type of bubble to display (define, factCheck, or analysis).
  */
 async function displayBubble(selectedText, type) {
+    const summaryEl = document.getElementById('summary');
+    const summary = summaryEl.innerText;
     let result = await populateBubble(type);
     if (result === "Error") return;
 
-    const updateBubbleContent = (content, title) => {
-        const bubble = document.getElementById(type);
-        bubble.innerHTML = `
-            <div class="bubble-title">${title}</div>
-            <div class="bubble-content">${formatTextResponse(content)}</div>
-            <footer class="bubble-footer">
-                <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
-            </footer>
-        `;
-    };
-
-    const onErrorUpdate = (errorMessage) => updateBubbleContent(errorMessage, type.charAt(0).toUpperCase() + type.slice(1));
-
     if (type === "factCheckBubble") {
-        result = await factCheck(selectedText, onErrorUpdate);
-        updateBubbleContent(result, "Fact Check");
+        chrome.runtime.sendMessage({ action: "factCheckContent", pageContent: selectedText, summary: summary });
     } else if (type === "defineBubble") {
-        result = await define(selectedText, onErrorUpdate);
-        updateBubbleContent(result, "Define");
+        chrome.runtime.sendMessage({ action: "defineContent", pageContent: selectedText, summary: summary });
     } else if (type === "analysisBubble") {
         const analyzeButton = document.getElementById('analyzeButton');
         const analyzeBubble = document.getElementById(type);
+        updateCharacterCount();
         if (!analyzeButton._listenerAdded) {
             analyzeButton.addEventListener('click', async () => {
                 const filteredText = selectedText.split('\n')
@@ -160,13 +141,13 @@ async function displayBubble(selectedText, type) {
                 await new Promise(r => setTimeout(r, 3000));
                 analyzeBubble.remove();
                 analyzeContent(filteredText);
-                chrome.runtime.sendMessage({ action: "activateButtons" });
             });
             analyzeButton._listenerAdded = true;
         }
     } else if (type === "rewriteBubble") {
         const rewriteButton = document.getElementById('rewriteButton');
         const rewriteBubble = document.getElementById(type);
+        updateCharacterCount();
         const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
         const loadingForBubble = document.getElementById('loadingContainer');
         checkboxes.forEach(checkbox => {
@@ -191,7 +172,6 @@ async function displayBubble(selectedText, type) {
                 await new Promise(r => setTimeout(r, 3000));
 
                 rewriteBubble.remove();
-                chrome.runtime.sendMessage({ action: "activateButtons" });
             });
             rewriteButton._listenerAdded = true;
         }
@@ -218,25 +198,51 @@ function getSelectedReadingLevel() {
  * @param {string} pageData - Content to be analyzed.
  */
 async function analyzeContent(pageData) {
-    statusState.stateChange("analyzing", true);
+    const analysisEl = document.getElementById('analysis');
+    const summaryEl = document.getElementById('summary');
+    const summary = summaryEl.innerText;
+    analysisEl.innerHTML = '';
 
-    const analysisText = document.getElementById('analysis');
-    analysisText.innerHTML = '';
-    const loadingSpinner = getOrCreateLoadingSpinner(analysisText);
+    const loadingSpinner = getOrCreateLoadingSpinner(analysisEl);
 
-    const updateAnalysisContent = (content) => {
-        analysisText.innerHTML = `<span>${formatTextResponse(content)}</span>`;
-    };
+    chrome.runtime.sendMessage({ action: "analyzeContent", pageContent: pageData, summary: summary });
+}
 
-    const onAnalysisErrorUpdate = (errorMessage) => updateAnalysisContent(errorMessage);
-
-    const analysis = await generateAnalysis(pageData, onAnalysisErrorUpdate);
-    updateAnalysisContent(analysis);
+/**
+ * Updates the analysis section in the sidebar with the newly generated analysis.
+ * @param {string} analysis - The analysistext to display in the sidebar.
+ */
+async function updateGeneratedAnalysis(analysis) {
+    const analysisEl = document.getElementById('analysis');
+    const loadingSpinner = getOrCreateLoadingSpinner(analysisEl);
+    analysisEl.innerHTML = analysis;
     loadingSpinner.remove();
 
     await saveContentToStorage("analysis", analysis);
+}
 
-    statusState.stateChange("analyzing", false);
+/**
+ * Updates the fact check and define bubbles with the newly generated fact check or definition.
+ * @param {string} type - fact check or definition
+ * @param {string} content - content to fill in bubble
+ */
+async function updateGeneratedFcOrDefine(type, content){
+    const updateBubbleContent = (content, title) => {
+        const bubble = document.getElementById(type);
+        bubble.innerHTML = `
+            <div class="bubble-title">${title}</div>
+            <div class="bubble-content">${formatTextResponse(content)}</div>
+            <footer class="bubble-footer">
+                <small>Click And Hold To Drag The Window<br>Double Click Bubble To Close The Window</small>
+            </footer>
+        `;
+    };
+    if (type === "factCheckBubble") {
+        updateBubbleContent(content, "Fact Check");
+    }
+    else if (type === "defineBubble") {
+        updateBubbleContent(content, "Define");
+    }
 }
 
 /**
@@ -245,8 +251,7 @@ async function analyzeContent(pageData) {
  * @param {string} selectedReadingLevel - the reading level desired
  */
 async function rewriteContent(selectedReadingLevel) {
-    statusState.stateChange("rewriting", true);
-    const summary = document.getElementById('summary').innerText;
+    chrome.runtime.sendMessage({ action: "startRewriting" });
     const rewriteBubbleText = document.querySelector('.rewriteBubble #bubbleText');
 
     const updateRewriteBubble = (content) => {
@@ -258,7 +263,7 @@ async function rewriteContent(selectedReadingLevel) {
     const result = await generateRewrite(selectedReadingLevel, onRewriteErrorUpdate);
     updateRewriteBubble(result);
 
-    statusState.stateChange("rewriting", false);
+    chrome.runtime.sendMessage({ action: "stopRewriting" });
 }
 
 /**
@@ -281,29 +286,6 @@ function updateCharacterCount() {
             currentElementClass.style.color = characterCount > 4000 ? 'red' : 'white';
         }
     }
-}
-
-/**
- * Cleans up the model when the page is unloaded.
- */
-async function cleanup() {
-    chatBot.destroyModel();
-    document.removeEventListener("mouseup", updateCharacterCount);
-    document.removeEventListener("keyup", updateCharacterCount);
-}
-
-/**
- * Returns the current statuses of the chatbot and the summarizing process.
- * @returns {Object} - The current statuses of the chatbot and summarizing state.
- */
-function getCurrentStatuses() {
-    return {
-        initialized: chatBot.isInitialized() ? "yes" : "no",
-        summarized: statusState.isSummarized() ? "yes" : "no",
-        notRunning: (statusState.allNotRunning() &&
-            !chatBot.isInitializing() &&
-            !chatBot.isResponding()) ? "yes" : "no"
-    };
 }
 
 /**
@@ -389,23 +371,17 @@ async function loadStoredContent() {
     const storedAnalysis = await getContentFromStorage("analysis");
 
     if (storedSummary) {
-        document.getElementById('summary').innerHTML = `<span>${storedSummary.replace(/[\*-]/g, '')}</span>`;
+        summary.innerHTML = `<span>${storedSummary.replace(/[\*-]/g, '')}</span>`;
     }
     if (storedAnalysis) {
-        document.getElementById('analysis').innerHTML = `<span>${formatTextResponse(storedAnalysis)}</span>`;
+        analysis.innerHTML = `<span>${formatTextResponse(storedAnalysis)}</span>`;
     }
 }
 
 /**
- * Formats the text response from the model, adding HTML tags for emphasis, bullets, etc.
- * @param {string} response - The raw response text from the model.
- * @returns {string} - The formatted HTML string.
+ * Cleans up the model when the page is unloaded.
  */
-function formatTextResponse(response) {
-    let htmlData = response.replace(/## (.*?)(?=\n|$)/g, "");
-    htmlData = htmlData.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-    htmlData = htmlData.replace(/^\s*\*\s+/gm, "• ");
-    htmlData = htmlData.replace(/\*(.*?)\*/g, "<em>$1</em>");
-    htmlData = htmlData.replace(/\n/g, "<br>");
-    return htmlData;
+async function cleanup() {
+    document.removeEventListener("mouseup", updateCharacterCount);
+    document.removeEventListener("keyup", updateCharacterCount);
 }

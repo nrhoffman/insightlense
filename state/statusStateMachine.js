@@ -2,13 +2,16 @@
  * Class that manages the state machine for tracking the progress of various tasks (summarizing, rewriting, analyzing).
  */
 class StatusStateMachine {
-    constructor() {
+    constructor(url) {
         this.summarized = false; // Indicates if the content has been summarized
         this.states = {
             summarizing: false, // Tracks if the summarizing operation is currently running
             rewriting: false, // Tracks if the rewriting operation is currently running
-            analyzing: false // Tracks if the analyzing operation is currently running
+            analyzing: false, // Tracks if the analyzing operation is currently running
+            factChecking: false, // Tracks if the fact checking operation is currently running
+            defining: false // Tracks if the defining operation is currently running
         };
+        this.pageUrl = url;
     }
 
     /**
@@ -73,7 +76,8 @@ class StatusStateMachine {
         }
 
         // Log the current state of all tasks
-        console.log(`Current States: summarizing=${this.states.summarizing}, rewriting=${this.states.rewriting}, analyzing=${this.states.analyzing}`);
+        console.log(`Current States: summarizing=${this.states.summarizing}, rewriting=${this.states.rewriting}, analyzing=${this.states.analyzing}
+            fact checking=${this.states.factChecking}, defining:=${this.states.defining}`);
     }
 
     /**
@@ -83,7 +87,9 @@ class StatusStateMachine {
         this.states = {
             summarizing: false,
             rewriting: false,
-            analyzing: false
+            analyzing: false,
+            factChecking: false,
+            defining: false
         };
         this.summarized = false;
         console.log("All states have been reset.");
