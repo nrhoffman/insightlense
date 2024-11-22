@@ -176,8 +176,8 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3,
  */
 async function createSummarizerSession(focusInput, maxChar = 4000, finalSummary = false) {
     const context = getSummaryContext(focusInput, maxChar);
-    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
-    else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
     
 }
 
