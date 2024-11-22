@@ -337,7 +337,7 @@ async function defineContent(tabId, pageData, summary) {
  */
 async function injectScriptsAndStyles(tabId) {
     try {
-        await chrome.scripting.insertCSS({ target: { tabId }, files: ["./content/bubbles/bubbles.css", "./content/sidebar/sidebar.css"] });
+        await chrome.scripting.insertCSS({ target: { tabId }, files: ["./src/content/bubbles/bubbles.css", "./src/content/sidebar/sidebar.css"] });
     } catch (error) {
         console.error("Error injecting styles:", error);
     }

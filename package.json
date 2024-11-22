@@ -2,7 +2,7 @@
   "name": "insightlense",
   "version": "1.0.0",
   "description": "The InsightLense Chrome Extension is your own personal AI web assistant that has your safe consumption of knowledge as it's top priority.",
-  "main": "background.js",
+  "main": "./src/background.js",
   "scripts": {
       "build": "webpack --config webpack.config.js",
       "prepare-release": "npm install && npm run build && powershell Compress-Archive -Path dist\\* -DestinationPath ./dist/release.zip"

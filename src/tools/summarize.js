@@ -133,7 +133,7 @@ async function combineAndSummarizeChunks(chunks, session, onErrorUpdate) {
  * @param {number} [delay=1000] - Initial delay (in ms) between retry attempts.
  * @returns {Promise<string>} The summary of the provided prompt.
  */
-async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3, delay = 1000) {
+async function attemptSummarization(session, prompt, onErrorUpdate, retries = 4, delay = 1000) {
     let result = '';
     let attempt = 0;
 
@@ -176,7 +176,7 @@ async function attemptSummarization(session, prompt, onErrorUpdate, retries = 3,
  */
 async function createSummarizerSession(focusInput, maxChar = 4000, finalSummary = false) {
     const context = getSummaryContext(focusInput, maxChar);
-    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "short" });
+    if (finalSummary) return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
     else return await ai.summarizer.create({ sharedContext: context, type: "tl;dr", format: "plain-text", length: "medium" });
     
 }

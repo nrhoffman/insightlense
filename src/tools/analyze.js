@@ -112,11 +112,11 @@ function getAnalysisPrompt(summary) {
             Bold Titles.
             Analyze the text and output in this exact format without including what's in parentheses:
                 1. Attributes:
-                - Sentiment(e.g., Positive, Negative, Neutral): Explanation
-                - Emotion(What emotion can be interpreted from the text): Explanation
-                - Toxicity(e.g., High, Moderate, Low, None): Explanation
-                - Truthfulness(e.g., High, Moderate, Low, Uncertain): Explanation
-                - Bias(e.g., High, Moderate, Low, None): Explanation
+                - Sentiment: (e.g., Positive, Negative, Neutral)
+                - Emotion: (What emotion can be interpreted from the text)
+                - Toxicity: (e.g., High, Moderate, Low, None)
+                - Truthfulness: (e.g., High, Moderate, Low, Uncertain)
+                - Bias: (e.g., High, Moderate, Low, None)
                 
                 2. Logical Fallacies: (Identify any logical fallacies present and provide a brief explanation for each)
                 - [List of logical fallacies and explanations]

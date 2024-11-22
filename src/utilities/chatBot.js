@@ -98,7 +98,7 @@ class ChatBot {
                 await this.modelInstance.prompt(this.getPrompt(curEl));
                 break;
             } catch (error) {
-                console.error(`Error initializing content on attempt ${attempt + 1}:`, error);
+                console.warn(`Error initializing content on attempt ${attempt + 1}:`, error);
                 attempt++;
                 if (attempt < retries) {
                     console.log(`Retrying in ${delay}ms...`);
@@ -146,7 +146,7 @@ class ChatBot {
                     this.responding = false;
                     return result;
                 } catch (error) {
-                    console.error(`Error retrieving output on attempt ${attempt + 1}:`, error);
+                    console.warn(`Error retrieving output on attempt ${attempt + 1}:`, error);
                     attempt++;
                     if (attempt < retries) {
                         console.log(`Retrying in ${delay}ms...`);
