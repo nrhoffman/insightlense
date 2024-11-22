@@ -3,6 +3,9 @@
 
 InsightLense is designed to help you navigate, understand, and analyze web content with ease and safety. Powered by advanced AI, it provides a suite of tools that empower you to interact with online information responsibly and effectively.
 
+### **This is NOT the Hackathon Demo. It's a very short demonstration.**
+https://github.com/user-attachments/assets/1e0596df-5eea-41df-b763-6defdaf381f3
+
 ### **Key Features**
 
 1. **Summarize Page Content**  
