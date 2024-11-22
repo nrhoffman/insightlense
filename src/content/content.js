@@ -1,3 +1,4 @@
+import { analyzeButtonHandler, rewriteButtonHandler } from './utility/buttonHandlers.js';
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
 import { formatTextResponse } from '../utilities/formatTextResponse.js';
 import { generateRewrite } from '../tools/rewrite.js';
@@ -6,10 +7,48 @@ import { populateBubble } from './bubbles/bubbles.js';
 
 console.log("Content script loaded");
 
+// DOM event handler
 document.addEventListener('DOMContentLoaded', async () => {
     await new Promise(r => setTimeout(r, 3000));
     chrome.runtime.sendMessage({ action: "initExtension" });
 });
+
+// Click event handler
+const dynamicClickHandler = async (event) => {
+    const { target } = event;
+    if (target) {
+        if (target.id === 'analyzeButton') {
+            await analyzeButtonHandler(analyzeContent);
+        }
+        else if (target.id === 'rewriteButton') {
+            await rewriteButtonHandler(rewriteContent);
+        }
+    }
+};
+
+// Change event handler
+const dynamicChangeHandler = async (event) => {
+    const { target } = event;
+
+    // Ensure the event target is a checkbox with name="readingLevel"
+    if (target && target.name === 'readingLevel' && target.closest('#reading-level')) {
+        // Get all checkboxes with name="readingLevel"
+        const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
+
+        // Loop through the checkboxes and uncheck all except the clicked one
+        checkboxes.forEach(checkbox => {
+            if (checkbox !== target) {
+                checkbox.checked = false;
+            }
+        });
+    }
+};
+
+// Add event listener for dynamically created buttons
+document.addEventListener('click', dynamicClickHandler);
+
+// Add event listener for dynamically created buttons
+document.addEventListener('change', dynamicChangeHandler);
 
 // Listener for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -64,9 +103,9 @@ document.addEventListener("mouseup", updateCharacterCount);
 document.addEventListener("keyup", updateCharacterCount);
 
 // Listen for page unload event to clean up the model
-window.onbeforeunload = async function () {
-    await cleanup();  // Ensure cleanup is completed before page unloads
-};
+window.addEventListener('pagehide', () => {
+    cleanup();
+});
 
 /**
  * Initializes the chatbot model by extracting and processing the page content.
@@ -121,75 +160,10 @@ async function displayBubble(selectedText, type) {
     } else if (type === "defineBubble") {
         chrome.runtime.sendMessage({ action: "defineContent", pageContent: selectedText, summary: summary });
     } else if (type === "analysisBubble") {
-        const analyzeButton = document.getElementById('analyzeButton');
-        const analyzeBubble = document.getElementById(type);
         updateCharacterCount();
-        if (!analyzeButton._listenerAdded) {
-            analyzeButton.addEventListener('click', async () => {
-                const filteredText = selectedText.split('\n')
-                    .filter(line => (line.match(/ /g) || []).length >= 8)
-                    .join('\n');
-
-                if (filteredText.length === 0 || filteredText.length > 4000) {
-                    displayErrorMessage(filteredText.length === 0 ? "Error: Text must be highlighted." : "Error: Selected characters must be under 4000.");
-                    return;
-                }
-
-                analyzeButton.remove();
-                document.querySelector('.analysisBubble #currentCharCount').remove();
-                document.querySelector('.analysisBubble #bubbleText').innerText = "Analysis will go to sidebar.";
-                await new Promise(r => setTimeout(r, 3000));
-                analyzeBubble.remove();
-                analyzeContent(filteredText);
-            });
-            analyzeButton._listenerAdded = true;
-        }
     } else if (type === "rewriteBubble") {
-        const rewriteButton = document.getElementById('rewriteButton');
-        const rewriteBubble = document.getElementById(type);
         updateCharacterCount();
-        const checkboxes = document.querySelectorAll('input[name="readingLevel"]');
-        const loadingForBubble = document.getElementById('loadingContainer');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function () {
-                checkboxes.forEach(cb => {
-                    if (cb !== this) cb.checked = false;
-                });
-            });
-        });
-
-        if (!rewriteButton._listenerAdded) {
-            rewriteButton.addEventListener('click', async () => {
-                const selectedReadingLevel = getSelectedReadingLevel();
-                rewriteButton.remove();
-                document.getElementById('reading-level').remove();
-                document.querySelector('.rewriteBubble #currentCharCount').remove();
-                document.querySelector('.rewriteBubble #bubbleText').innerText = "Rewrite in progress...";
-                loadingForBubble.classList.add('active');
-
-                await rewriteContent(selectedReadingLevel);
-                loadingForBubble.remove();
-                await new Promise(r => setTimeout(r, 3000));
-
-                rewriteBubble.remove();
-            });
-            rewriteButton._listenerAdded = true;
-        }
     }
-}
-
-/**
- * Returns the selected reading level based on checkbox selection.
- */
-function getSelectedReadingLevel() {
-    const childrenCheckbox = document.getElementById('childrenLevel');
-    const collegeCheckbox = document.getElementById('collegeLevel');
-    const currentCheckbox = document.getElementById('currentLevel');
-
-    if (childrenCheckbox.checked) return `a children's reading level`;
-    if (collegeCheckbox.checked) return 'a college reading level';
-    if (currentCheckbox.checked) return `the reading level it's currently at`;
-    return '';
 }
 
 /**
@@ -289,29 +263,6 @@ function updateCharacterCount() {
 }
 
 /**
- * Displays an error message in the analysis bubble if the text selection does not meet requirements.
- * @param {string} message - The error message to display.
- */
-function displayErrorMessage(message) {
-    const analyzeBubble = document.getElementById('analysisBubble');
-    const analyzeBoxContainer = analyzeBubble.querySelector('.bubble-content');
-
-    let errorMessage = document.querySelector('.error-message');
-    if (!errorMessage) {
-        errorMessage = document.createElement('div');
-        errorMessage.classList.add('error-message');
-        errorMessage.style.color = 'red';
-        errorMessage.style.marginBottom = '10px';
-        errorMessage.style.marginTop = '10px';
-        errorMessage.style.textAlign = 'center';
-        errorMessage.style.fontSize = '1em';
-        errorMessage.style.fontWeight = '500';
-        analyzeBoxContainer.insertBefore(errorMessage, document.getElementById('analyzeButton'));
-    }
-    errorMessage.innerText = message;
-}
-
-/**
  * Saves content to Chrome's local storage along with the current timestamp.
  * This helps to track when each entry was saved for expiration purposes.
  * 
@@ -381,7 +332,9 @@ async function loadStoredContent() {
 /**
  * Cleans up the model when the page is unloaded.
  */
-async function cleanup() {
+function cleanup() {
     document.removeEventListener("mouseup", updateCharacterCount);
     document.removeEventListener("keyup", updateCharacterCount);
+    document.removeEventListener('click', dynamicClickHandler);
+    document.removeEventListener('change', dynamicChangeHandler);
 }
