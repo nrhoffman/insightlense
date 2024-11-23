@@ -110,6 +110,7 @@ function getAnalysisPrompt(summary) {
             Ignore text you're not trained on.
             Don't output language you're not trained on.
             Bold Titles.
+            In the analysis, look at phishing possibility, scam possibility, misdirection, misinformation, propaganda, etc.
             Analyze the text and output in this exact format without including what's in parentheses:
                 1. Attributes:
                 - Sentiment: (e.g., Positive, Negative, Neutral)
@@ -124,7 +125,7 @@ function getAnalysisPrompt(summary) {
                 3. Ulterior Motives: (Assess if there are any ulterior motives behind the text and explain)
                 - [List of potential ulterior motives]
 
-                4. Overall Analysis: (Provide an overall analysis of the text)
+                4. Overall Analysis: (Provide an overall analysis of the text including scam/phishing possibility)
                 - [Detailed analysis of the implications and context of the text]
             
             Again: Do NOT include what is in parentheses in the format.
