@@ -24,8 +24,8 @@ jobs:
       - name: Build the extension
         run: npm run build
 
-      - name: Zip the dist folder
-        run: powershell Compress-Archive -Path dist\\* -DestinationPath release.zip
+      - name: Zip the project
+        run: powershell Compress-Archive -Path * -DestinationPath insightlense_${{ github.ref_name }}.zip -Force
 
       - name: Create GitHub Release
         id: create_release
