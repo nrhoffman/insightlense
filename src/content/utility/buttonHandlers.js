@@ -50,7 +50,6 @@ export async function rewriteButtonHandler(rewriteContent) {
     // Remove the rewrite button and reading level controls during the process
     rewriteButton.remove();
     document.getElementById('reading-level').remove();
-    document.querySelector('.rewriteBubble #currentCharCount').remove();
     document.querySelector('.rewriteBubble #bubbleText').innerText = "Rewrite in progress...";
     loadingForBubble.classList.add('active');
 

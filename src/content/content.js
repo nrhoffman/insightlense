@@ -161,8 +161,6 @@ async function displayBubble(selectedText, type) {
         chrome.runtime.sendMessage({ action: "defineContent", pageContent: selectedText, summary: summary });
     } else if (type === "analysisBubble") {
         updateCharacterCount();
-    } else if (type === "rewriteBubble") {
-        updateCharacterCount();
     }
 }
 

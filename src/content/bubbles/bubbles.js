@@ -211,8 +211,7 @@ function fillInRewriteBubble(bubble) {
     bubble.innerHTML = `
         <div class="bubble-title">Rewrite</div>
         <div class="bubble-content">
-            <div id="bubbleText">Max Character Count: 4000</div>
-            <div id="currentCharCount">Current Characters Selected: 0</div>
+            <div id="bubbleText"></div>
 
             <div id="reading-level" class="reading-level">
                 <div class="checkbox-text">Reading Level:</div>

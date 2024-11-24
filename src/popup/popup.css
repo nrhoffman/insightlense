@@ -29,10 +29,6 @@ body {
   padding-bottom: 5px;
 }
 
-.popup-header:hover {
-  background-color: #35383a;
-}
-
 /* Box Container */
 .box-container {
   background-color: #35383a;
