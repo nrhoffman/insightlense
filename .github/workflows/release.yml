@@ -3,7 +3,7 @@ name: Build and Release Chrome Extension
 on:
   push:
     tags:
-      - 'v*'  # Trigger the workflow only when pushing tags like 'v1.0', 'v2.0', etc.      tag: "git tag v1.0" then push: "git push origin v1.0"
+      - 'v*'  # Trigger the workflow only for tags like 'v1.0', 'v2.0', etc.
 
 jobs:
   build-and-release:
@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: '22'
 
@@ -29,19 +29,18 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref_name }}  # Uses the tag that triggered the workflow
-          release_name: Release ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            This is an automated release for version ${{ github.ref_name }}.
           draft: false
           prerelease: false
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./release.zip
