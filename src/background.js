@@ -1,3 +1,8 @@
+/*!
+* Copyright (c) 2024 Nathan Robert Hoffman-Yanqui
+* Licensed under MIT License.
+*/
+
 import ChatBot from './utilities/chatBot.js';
 import { clearExpiredStorage } from './utilities/clearExpiredStorage.js'
 import ExtensionState from './state/extensionState.js'

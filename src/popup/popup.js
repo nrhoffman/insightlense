@@ -1,3 +1,8 @@
+/*!
+* Copyright (c) 2024 Nathan Robert Hoffman-Yanqui
+* Licensed under MIT License.
+*/
+
 let listenersInitialized = false;
 let typingInterval = null;
 

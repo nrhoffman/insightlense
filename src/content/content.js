@@ -1,3 +1,8 @@
+/*!
+* Copyright (c) 2024 Nathan Robert Hoffman-Yanqui
+* Licensed under MIT License.
+*/
+
 import { analyzeButtonHandler, rewriteButtonHandler } from './utility/buttonHandlers.js';
 import { createSidebar, getOrCreateLoadingSpinner } from './sidebar/sidebar.js';
 import { formatTextResponse } from '../utilities/formatTextResponse.js';

@@ -2,6 +2,14 @@
   "manifest_version": 3,
   "name": "InsightLense",
   "description": "The InsightLense Chrome Extension is your own personal AI web assistant that has your safe consumption of knowledge as it's top priority.",
+  "author": "Nathan Robert Hoffman-Yanqui",
+  "homepage_url": "https://github.com/nrhoffman/insightlense",
+  "licenses": [
+    {
+    "type": "MIT",
+    "url": "https://github.com/nrhoffman/insightlense/blob/main/LICENSE"
+    }
+  ],
   "version": "1.0",
   "permissions": [
     "activeTab",
